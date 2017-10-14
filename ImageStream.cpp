@@ -3,18 +3,17 @@
 //
 
 #include "ImageStream.h"
+#include <opencv2/highgui.hpp>
 
 ImageStream::ImageStream(const string &folder):MediaStream(folder) //,inputPath(folder)
 {
-    setInput(folder);
     allImages.clear();
-    currentImagePtr = allImages.begin();
+    setInput(folder);
 }
 
 ImageStream::ImageStream() {
-    inputPath = "unknown";
     allImages.clear();
-    currentImagePtr = allImages.begin();
+    inputPath = "unknown";
 }
 
 void ImageStream::setInput(const string &folder) {
@@ -43,6 +42,8 @@ void ImageStream::setInput(const string &folder) {
         cout << "Error: incorrect jpg folder path." << endl;
         exit(-1);
     }
+    sort(allImages.begin(), allImages.end());
+    currentImagePtr = allImages.begin();
 }
 
 bool ImageStream::read(Mat &m) {

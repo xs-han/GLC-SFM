@@ -15,6 +15,10 @@ public:
     string inputPath;
     bool finish;
 
+    virtual bool isFinish() const {
+        return finish;
+    }
+
     MediaStream():inputPath("unknown"), finish(true){};
 
     explicit MediaStream(const string & name): inputPath(name), finish(false){};
@@ -26,6 +30,7 @@ public:
     virtual MediaStream& operator >> (Mat & m) = 0;
 
     virtual explicit operator bool() = 0;
+
 
 };
 

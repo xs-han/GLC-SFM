@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <opencv_storage>
 	<inputType>"image"</inputType>
-	<inputPath>"dataset"</inputPath>
-	<calibrationFile>"cfg/default.xml"</calibrationFile>
+	<inputPath>"/home/xushen/Desktop/MediaSoc/Original/forward"</inputPath>
+	<calibrationFile>"../cfg/default.xml"</calibrationFile>
+	<descriptorType>"surf"</descriptorType>
 </opencv_storage>

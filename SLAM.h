@@ -8,8 +8,8 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 
-#include "MapPoint.hpp"
-#include "KeyFrame.hpp"
+#include "MapPoint.h"
+#include "KeyFrame.h"
 #include "VideoStream.h"
 #include "ImageStream.h"
 
@@ -18,18 +18,23 @@ using namespace std;
 
 class SLAM {
 public:
-    static Mat cameraMartix;
+    Mat cameraMartix;
+    cv::Ptr<cv::Feature2D> detector;
+    FeatureMatcher matcher;
+
     Mat distortionCoefficient;
     vector<MapPoint *> pointClouds;
     vector<KeyFrame *> allKeyFrames;
 
     MediaStream * ms;
 
-    explicit SLAM(string settingFile = "../xml/setting.xml");
+    explicit SLAM(string settingFile = "../cfg/setting.xml");
 
     void setCameraIntrinsicParams(string calibFile);
 
     void process();
+
+    bool isFrameKey(const KeyFrame &refKf, const Mat & newFrame);
 
     void initialize();
 
@@ -39,6 +44,7 @@ public:
 
     void drawMap();
 
+    void undistortFrame(Mat &input, Mat &output);
 };
 
 

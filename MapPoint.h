@@ -7,7 +7,7 @@
 
 #include <iostream>
 #include <opencv2/core.hpp>
-#include "KeyFrame.hpp"
+#include "KeyFrame.h"
 using namespace std;
 using namespace cv;
 

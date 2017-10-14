@@ -3,6 +3,11 @@
 //
 
 #include "VideoStream.h"
+#include <iostream>
+#include <opencv/cv.hpp>
+
+using namespace std;
+using namespace cv;
 
 VideoStream::VideoStream(const string &vName) :MediaStream(vName) //inputPath(vName),
                                                                         //, finish(false)
@@ -102,4 +107,8 @@ double VideoStream::getFrameRate() const {
 
 VideoStream::operator bool() {
     return !finish;
+}
+
+bool VideoStream::isFinish() const {
+    return finish;
 }

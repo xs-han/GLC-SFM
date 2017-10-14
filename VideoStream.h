@@ -21,6 +21,8 @@ protected:
     Mat frame;
     VideoCapture cap;
     //bool finish;
+public:
+    bool isFinish() const;
 
 public:
     explicit VideoStream(const string &vName);
