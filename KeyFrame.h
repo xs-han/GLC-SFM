@@ -24,6 +24,7 @@ public:
     Mat tvec;
 
     vector<KeyPoint> kps;
+    Mat desc;
     vector<MapPoint* > mps;
 
     KeyFrame(Mat newImg);
@@ -37,6 +38,15 @@ public:
     void detectKps();
 
     bool isFrameKey(const Mat &newFrame, vector<DMatch> &matches);
+
+    const Mat &getRvec() const;
+
+    void setRvec(const Mat &rvec);
+
+    const Mat &getTvec() const;
+
+    void setTvec(const Mat &tvec);
+
 };
 
 

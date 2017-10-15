@@ -3,6 +3,9 @@
 //
 
 #include "SLAM.h"
+#include <opencv2/calib3d.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/core.hpp>
 
 void SLAM::process() {
     Mat frame;
@@ -68,6 +71,33 @@ void SLAM::setCameraIntrinsicParams(string calibFile) {
 }
 
 void SLAM::initialize() {
+    Mat frame;
+    // wait first 1s;
+    for(int i = 0; i < 31; i++){
+        *ms >> frame;
+    }
+
+    KeyFrame * k = new KeyFrame(frame);
+    allKeyFrames.push_back(k);
+
+    vector<Point2f> points1;
+    for(KeyPoint k1 : allKeyFrames.back()->kps){
+        points1.push_back(k1.pt);
+    }
+    while (true){
+        *ms >> frame;
+        if(allKeyFrames.back()->isFrameKey(frame)){
+            vector<DMatch> matches;
+            vector<KeyPoint> frameKps;
+            Mat frameDesc;
+            detector->detectAndCompute(frame,noArray(), frameKps, frameDesc);
+            Mat fundamental = matcher.match(allKeyFrames.back()->kps, allKeyFrames.back()->desc,
+                                            frameKps, frameDesc, matches);
+
+
+            break;
+        }
+    }
 
 }
 
@@ -75,8 +105,8 @@ void SLAM::undistortFrame(Mat &input, Mat &output) {
     Mat map1, map2;
     Mat R = Mat::eye(3,3,CV_32F);
     initUndistortRectifyMap(cameraMartix, distortionCoefficient, R,
-                            getOptimalNewCameraMatrix(cameraMartix, distortionCoefficient, Size(640, 480), 1, Size(320, 240), 0)
-            , Size(320, 240), CV_32FC1, map1, map2);
+                            getOptimalNewCameraMatrix(cameraMartix, distortionCoefficient, input.size(), 1, input.size(), 0)
+            , input.size() , CV_16SC2, map1, map2);
     output = input.clone();
     remap(input, output, map1, map2, INTER_CUBIC);
 }

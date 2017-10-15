@@ -165,6 +165,7 @@ cv::Mat FeatureMatcher::ransacTest(const std::vector<cv::DMatch>& matches,
     // Convert keypoints into Point2f
     //std::vector<cv::Point2f> points1, points2;
     cv::Mat fundamental;
+    points1.clear(); points2.clear();
     for (std::vector<cv::DMatch>::
          const_iterator it= matches.begin();
          it!= matches.end(); ++it) {
