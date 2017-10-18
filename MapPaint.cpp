@@ -10,7 +10,7 @@ MapPaint::MapPaint() {
 }
 
 void MapPaint::drawPoint(const MapPoint &p) {
-    glPointSize(1.0f);
+    glPointSize(5.0f);
     glBegin(GL_POINTS);
     glColor3f(1.0,1.0,1.0);
     glVertex3f(p.x,p.y,p.z);

@@ -38,7 +38,7 @@ void SLAM::process() {
             Mat undistFrame;
             undistortFrame(frame, undistFrame);
             imshow("frames", undistFrame);
-            cvWaitKey(0);
+            cvWaitKey(10);
         }
         // Clear screen and activate view to render into
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -113,9 +113,9 @@ void SLAM::initialize() {
     Mat frame;
     Mat undistFrame;
     // wait first 1s;
-//    for(int i = 0; i < 31; i++){
-//        *ms >> frame;
-//    }
+    for(int i = 0; i < 31; i++){
+        *ms >> frame;
+    }
     *ms >> frame;
     undistortFrame(frame, undistFrame);
     frame = undistFrame.clone();
@@ -139,8 +139,15 @@ void SLAM::initialize() {
         Mat & desc1 = allKeyFrames.back()->desc;
         vector<KeyPoint> kps2;
         Mat desc2;
-        Mat R, t;
+        Mat R, t, mask;
         if(allKeyFrames.back()->isFrameKey(frame, kps2, desc2, matches)){
+            Mat outimg;
+            drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, kps2, matches, outimg);
+            namedWindow("matches",0);
+            imshow("matches", outimg);
+            cvWaitKey(0);
+            destroyWindow("matches");
+
             points1.clear();points2.clear();
             points1.resize((int)matches.size()); points2.resize((int)matches.size());
             int i = 0;
@@ -149,19 +156,21 @@ void SLAM::initialize() {
                 points2[i] = kps2[m.trainIdx].pt;
                 i++;
             }
-            Mat E = findEssentialMat(points1, points2, cameraMatrix);
-            recoverPose(E, points1, points2, R, t, cameraMatrix.at<double>(1,1), Point2f(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2)), noArray());
+            Mat E = findEssentialMat(points1, points2, cameraMatrix.at<double>(0,0), Point2d(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2)), RANSAC, 0.999, 1, mask);
+            double feasible_count = countNonZero(mask);
+            cout << (int)feasible_count << " -in- " << points1.size() << endl;
+            recoverPose(E, points1, points2, R, t, cameraMatrix.at<double>(0,0), Point2d(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2)), mask);
             KeyFrame * k1 = new KeyFrame(frame, R, t);
-            cout << allKeyFrames.back()->rmat << endl << k1->rmat << endl;
             allKeyFrames.back()->triangulateNewKeyFrame(*k1, matches, res);
             assert((int)matches.size() == res.cols);
             assert(res.type() == CV_32F);
             cout << res << endl;
             for(i = 0; i < res.cols; i++){
                 Mat p = res.col(i);
-                Point3f pp(p.at<float>(0) / p.at<float>(3),
-                           p.at<float>(1) / p.at<float>(3),
-                           p.at<float>(2) / p.at<float>(3));
+                Point3f pp((p.at<float>(0) / p.at<float>(3)),
+                           (p.at<float>(1) / p.at<float>(3)),
+                           (p.at<float>(2) / p.at<float>(3)));
+
                 MapPoint * mp = new MapPoint(pp);
                 mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
                 mp->addKf(*k1, k1->kps[matches[i].trainIdx]);
@@ -169,11 +178,6 @@ void SLAM::initialize() {
                 allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
                 k1->mps[matches[i].trainIdx] = mp;
             }
-
-            cout << allKeyFrames.back()->rmat.type() << endl << allKeyFrames.back()->tvec.type() << endl
-                 << allKeyFrames.back()->rmat << endl << allKeyFrames.back()->tvec << endl;
-            cout << k1->rmat.type() << endl << k1->tvec.type() << endl
-                 << k1->rmat << endl << k1->tvec << endl;
             allKeyFrames.push_back(k1);
 
             break;
