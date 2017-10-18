@@ -3,5 +3,5 @@
 	<inputType>"image"</inputType>
 	<inputPath>"/home/xushen/CLionProjects/opencv_calib/bin/camera02L"</inputPath>
 	<calibrationFile>"../cfg/default.xml"</calibrationFile>
-	<descriptorType>"sift"</descriptorType>
+	<descriptorType>"surf"</descriptorType>
 </opencv_storage>

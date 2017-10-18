@@ -12,6 +12,7 @@
 #include "KeyFrame.h"
 #include "VideoStream.h"
 #include "ImageStream.h"
+#include "MapPaint.h"
 
 using namespace cv;
 using namespace std;
@@ -27,6 +28,7 @@ public:
     vector<KeyFrame *> allKeyFrames;
 
     MediaStream * ms;
+    MapPaint mPaint;
 
     explicit SLAM(string settingFile = "../cfg/setting.xml");
 

@@ -2,14 +2,18 @@ cmake_minimum_required(VERSION 3.5)
 project(MV_SLAM)
 
 find_package(OpenCV REQUIRED)
+find_package(Pangolin REQUIRED)
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 set(CMAKE_CXX_STANDARD 11)
 
 set(SOURCE_FILES main.cpp
+        SLAM.h SLAM.cpp
         MapPoint.h
-        KeyFrame.h
-        VideoStream.h ImageStream.h SLAM.cpp SLAM.h MediaStream.h VideoStream.cpp ImageStream.cpp
-        FeatureMatcher.h FeatureMatcher.cpp KeyFrame.cpp)
+        KeyFrame.h KeyFrame.cpp
+        MediaStream.h
+        VideoStream.h VideoStream.cpp
+        ImageStream.h ImageStream.cpp
+        FeatureMatcher.h FeatureMatcher.cpp MapPaint.cpp MapPaint.h)
 add_executable(MV_SLAM ${SOURCE_FILES})
-target_link_libraries(MV_SLAM ${OpenCV_LIBS})
+target_link_libraries(MV_SLAM ${OpenCV_LIBS} ${Pangolin_LIBRARIES})

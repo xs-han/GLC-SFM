@@ -3,6 +3,7 @@
 //
 
 #include "KeyFrame.h"
+#include <opencv2/highgui.hpp>
 using namespace std;
 using namespace cv;
 
@@ -15,15 +16,21 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
     matches.clear();
     detector->detectAndCompute(newFrame, noArray(), newKps, newDesc );
     matcher.match(kps, desc, newKps, newDesc, matches);
+    Mat outimg;
+    drawMatches(img, kps, newFrame, newKps, matches, outimg);
+    namedWindow("matches");
+    imshow("matches", outimg);
+    cvWaitKey(0);
+    destroyWindow("matches");
     return matches.size() < kps.size() * 1;
 }
 
-const Mat &KeyFrame::getRvec() const {
-    return rvec;
+const Mat &KeyFrame::getRmat() const {
+    return rmat;
 }
 
-void KeyFrame::setRvec(const Mat &rvec) {
-    KeyFrame::rvec = rvec.clone();
+void KeyFrame::setRmat(const Mat &rmat) {
+    KeyFrame::rmat = rmat.clone();
 }
 
 const Mat &KeyFrame::getTvec() const {
@@ -39,8 +46,8 @@ KeyFrame::KeyFrame(const Mat &newImg) {
     detector->detectAndCompute(img, noArray(), kps, desc);
     mps.clear();
     mps.resize(kps.size(), nullptr);
-    rvec.create(3,1,CV_32F);
-    tvec.create(3,1,CV_32F);
+    rmat = Mat::eye(3,3,CV_64F);
+    tvec = Mat::zeros(3,1,CV_64F);
 }
 
 KeyFrame::KeyFrame(const Mat& newImg, Mat &R, Mat &t) {
@@ -49,30 +56,33 @@ KeyFrame::KeyFrame(const Mat& newImg, Mat &R, Mat &t) {
     mps.clear();
     mps.resize(kps.size(), nullptr);
     if (R.rows == 3 && 3 == R.cols){
-        rvec.create(3,1,CV_32F);
-        Rodrigues(R.clone(), rvec);
+        rmat = R.clone();
+    } else if(R.rows == 1 || R.cols == 1){
+        rmat.create(3,3,CV_64F);
+        Rodrigues(R.clone(), rmat);
     } else{
-        rvec = R.clone();
+        cout << "Invalid R data." << endl;
+        exit(-2);
     }
     tvec = t.clone();
 }
 
 void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
                                       const vector<DMatch> & matches,
-                                      vector<Point2f> & res) {
+                                      Mat & res) {
     Mat R1, t1, projMatx1, R2, t2, projMatx2;
     vector<Point2f> points1(matches.size());
     vector<Point2f> points2(matches.size());
 
-    R1.create(3,3,CV_32F);
-    Rodrigues(rvec, R1);
+    R1 = rmat.clone();
     t1 = tvec.clone();
     hconcat(R1,t1,projMatx1);
+    projMatx1 = KeyFrame::cameraMatrix * projMatx1.clone();
 
-    R2.create(3,3,CV_32F);
-    Rodrigues(newFrame.rvec, R2);
+    R2 = newFrame.rmat.clone();
     t2 = newFrame.tvec.clone();
     hconcat(R2,t2,projMatx2);
+    projMatx2 = KeyFrame::cameraMatrix * projMatx2.clone();
 
     int i = 0;
     for(const DMatch & m: matches){

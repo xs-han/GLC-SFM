@@ -6,16 +6,52 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core.hpp>
+#include <pangolin/pangolin.h>
 
 void SLAM::process() {
     Mat frame;
     namedWindow("frames", 0);
     initialize();
-    while (*ms >> frame){
-        Mat undistFrame;
-        undistortFrame(frame, undistFrame);
-        imshow("frames", undistFrame);
-        cvWaitKey(0);
+    //mPaint.drawMap(allKeyFrames, pointClouds);
+    //创建一个窗口
+    pangolin::CreateWindowAndBind("Main",640,480);
+    //启动深度测试
+    glEnable(GL_DEPTH_TEST);
+
+    // Define Projection and initial ModelView matrix
+    pangolin::OpenGlRenderState s_cam(
+            pangolin::ProjectionMatrix(640,480,420,420,320,240,0.2,100),
+            //对应的是gluLookAt,摄像机位置,参考点位置,up vector(上向量)
+            pangolin::ModelViewLookAt(0,-10,0.1,0,0,0,pangolin::AxisNegY)
+    );
+
+    // Create Interactive View in window
+    pangolin::Handler3D handler(s_cam);
+    //setBounds 跟opengl的viewport 有关
+    //看SimpleDisplay中边界的设置就知道
+    pangolin::View &d_cam = pangolin::CreateDisplay().SetBounds(0.0,1.0,0.0,1.0,-640.0f/480.0f)
+            .SetHandler(&handler);
+
+    while (!pangolin::ShouldQuit()){
+        mPaint.drawMap(allKeyFrames, pointClouds);
+        if(*ms >> frame) {
+            Mat undistFrame;
+            undistortFrame(frame, undistFrame);
+            imshow("frames", undistFrame);
+            cvWaitKey(0);
+        }
+        // Clear screen and activate view to render into
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        d_cam.Activate(s_cam);
+
+        // Render OpenGL Cube
+        //pangolin::glDrawColouredCube();\
+        //坐标轴的创建
+        pangolin::glDrawAxis(3);
+
+        mPaint.drawMap(allKeyFrames, pointClouds);
+        // Swap frames and Process Events
+        pangolin::FinishFrame();
     }
 }
 
@@ -65,6 +101,8 @@ void SLAM::setCameraIntrinsicParams(string calibFile) {
     }
     fs["Camera_Matrix"] >> cameraMatrix;
     fs["Distortion_Coefficients"] >> distortionCoefficient;
+    //cameraMatrix.convertTo(cameraMatrix, CV_32F);
+    //distortionCoefficient.convertTo(distortionCoefficient,CV_32F);
 
     KeyFrame::cameraMatrix = cameraMatrix.clone();
     cout << "Set camera martix:" << endl << cameraMatrix << endl;
@@ -95,6 +133,7 @@ void SLAM::initialize() {
 
         vector<Point2f> points1;
         vector<Point2f> points2;
+        Mat res;
         vector<DMatch> matches;
         vector<KeyPoint> & kps1 = allKeyFrames.back()->kps;
         Mat & desc1 = allKeyFrames.back()->desc;
@@ -111,10 +150,32 @@ void SLAM::initialize() {
                 i++;
             }
             Mat E = findEssentialMat(points1, points2, cameraMatrix);
-            recoverPose(E, points1, points2, R, t, cameraMatrix.at<float>(1,1), Point2f(cameraMatrix.at<float>(0,2), cameraMatrix.at<float>(1,2)), noArray());
+            recoverPose(E, points1, points2, R, t, cameraMatrix.at<double>(1,1), Point2f(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2)), noArray());
             KeyFrame * k1 = new KeyFrame(frame, R, t);
+            cout << allKeyFrames.back()->rmat << endl << k1->rmat << endl;
+            allKeyFrames.back()->triangulateNewKeyFrame(*k1, matches, res);
+            assert((int)matches.size() == res.cols);
+            assert(res.type() == CV_32F);
+            cout << res << endl;
+            for(i = 0; i < res.cols; i++){
+                Mat p = res.col(i);
+                Point3f pp(p.at<float>(0) / p.at<float>(3),
+                           p.at<float>(1) / p.at<float>(3),
+                           p.at<float>(2) / p.at<float>(3));
+                MapPoint * mp = new MapPoint(pp);
+                mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
+                mp->addKf(*k1, k1->kps[matches[i].trainIdx]);
+                pointClouds.push_back(mp);
+                allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
+                k1->mps[matches[i].trainIdx] = mp;
+            }
 
+            cout << allKeyFrames.back()->rmat.type() << endl << allKeyFrames.back()->tvec.type() << endl
+                 << allKeyFrames.back()->rmat << endl << allKeyFrames.back()->tvec << endl;
+            cout << k1->rmat.type() << endl << k1->tvec.type() << endl
+                 << k1->rmat << endl << k1->tvec << endl;
             allKeyFrames.push_back(k1);
+
             break;
         }
     }
@@ -123,6 +184,6 @@ void SLAM::initialize() {
 
 void SLAM::undistortFrame(Mat &input, Mat &output) {
     Mat m1, m2;
-    initUndistortRectifyMap(cameraMatrix, distortionCoefficient, Mat::eye(3,3,CV_32F), cameraMatrix, input.size(), CV_32FC1, m1, m2);
+    initUndistortRectifyMap(cameraMatrix, distortionCoefficient, Mat::eye(3,3,CV_32F), cameraMatrix, input.size(), CV_32F, m1, m2);
     remap(input, output, m1, m2, INTER_CUBIC);
 }

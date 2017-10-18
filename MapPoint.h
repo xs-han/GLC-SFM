@@ -20,6 +20,7 @@ public:
     vector<KeyPoint *> kps;
 
     explicit MapPoint(const Point3f & p):x(p.x), y(p.y), z(p.z){kfs.clear(); kps.clear();};
+    MapPoint(float x1, float y1, float z1):x(x1), y(y1), z(z1){};
     void addKf(KeyFrame & f, KeyPoint & p){kfs.push_back(&f); kps.push_back(&p);}
 
     friend ostream &operator<<(ostream &os, const MapPoint &point) {
