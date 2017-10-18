@@ -10,11 +10,12 @@
 void SLAM::process() {
     Mat frame;
     namedWindow("frames", 0);
+    initialize();
     while (*ms >> frame){
         Mat undistFrame;
         undistortFrame(frame, undistFrame);
         imshow("frames", undistFrame);
-        cvWaitKey(20);
+        cvWaitKey(0);
     }
 }
 
@@ -62,39 +63,58 @@ void SLAM::setCameraIntrinsicParams(string calibFile) {
         cout << "Could not open the calibration file: \"" << calibFile << "\"" << endl;
         exit(-1);
     }
-    fs["Camera_Matrix"] >> cameraMartix;
+    fs["Camera_Matrix"] >> cameraMatrix;
     fs["Distortion_Coefficients"] >> distortionCoefficient;
 
-    KeyFrame::cameraMartix = cameraMartix.clone();
-    cout << "Set camera martix:" << endl << cameraMartix << endl;
+    KeyFrame::cameraMatrix = cameraMatrix.clone();
+    cout << "Set camera martix:" << endl << cameraMatrix << endl;
     cout << "Set distortion coefficients: " << endl << distortionCoefficient << endl;
 }
 
 void SLAM::initialize() {
     Mat frame;
+    Mat undistFrame;
     // wait first 1s;
-    for(int i = 0; i < 31; i++){
-        *ms >> frame;
-    }
-
+//    for(int i = 0; i < 31; i++){
+//        *ms >> frame;
+//    }
+    *ms >> frame;
+    undistortFrame(frame, undistFrame);
+    frame = undistFrame.clone();
     KeyFrame * k = new KeyFrame(frame);
     allKeyFrames.push_back(k);
 
-    vector<Point2f> points1;
-    for(KeyPoint k1 : allKeyFrames.back()->kps){
-        points1.push_back(k1.pt);
-    }
     while (true){
+        if(ms->isFinish()){
+            cout << "Initialize failed. Detect end of the input media stream." << endl;
+            exit(-1);
+        }
         *ms >> frame;
-        if(allKeyFrames.back()->isFrameKey(frame)){
-            vector<DMatch> matches;
-            vector<KeyPoint> frameKps;
-            Mat frameDesc;
-            detector->detectAndCompute(frame,noArray(), frameKps, frameDesc);
-            Mat fundamental = matcher.match(allKeyFrames.back()->kps, allKeyFrames.back()->desc,
-                                            frameKps, frameDesc, matches);
+        undistortFrame(frame, undistFrame);
+        frame = undistFrame.clone();
 
+        vector<Point2f> points1;
+        vector<Point2f> points2;
+        vector<DMatch> matches;
+        vector<KeyPoint> & kps1 = allKeyFrames.back()->kps;
+        Mat & desc1 = allKeyFrames.back()->desc;
+        vector<KeyPoint> kps2;
+        Mat desc2;
+        Mat R, t;
+        if(allKeyFrames.back()->isFrameKey(frame, kps2, desc2, matches)){
+            points1.clear();points2.clear();
+            points1.resize((int)matches.size()); points2.resize((int)matches.size());
+            int i = 0;
+            for(DMatch m : matches){
+                points1[i] = kps1[m.queryIdx].pt;
+                points2[i] = kps2[m.trainIdx].pt;
+                i++;
+            }
+            Mat E = findEssentialMat(points1, points2, cameraMatrix);
+            recoverPose(E, points1, points2, R, t, cameraMatrix.at<float>(1,1), Point2f(cameraMatrix.at<float>(0,2), cameraMatrix.at<float>(1,2)), noArray());
+            KeyFrame * k1 = new KeyFrame(frame, R, t);
 
+            allKeyFrames.push_back(k1);
             break;
         }
     }
@@ -102,13 +122,7 @@ void SLAM::initialize() {
 }
 
 void SLAM::undistortFrame(Mat &input, Mat &output) {
-    Mat map1, map2;
-    Mat R = Mat::eye(3,3,CV_32F);
-    initUndistortRectifyMap(cameraMartix, distortionCoefficient, R,
-                            getOptimalNewCameraMatrix(cameraMartix, distortionCoefficient, input.size(), 1, input.size(), 0)
-            , input.size() , CV_16SC2, map1, map2);
-    output = input.clone();
-    remap(input, output, map1, map2, INTER_CUBIC);
+    Mat m1, m2;
+    initUndistortRectifyMap(cameraMatrix, distortionCoefficient, Mat::eye(3,3,CV_32F), cameraMatrix, input.size(), CV_32FC1, m1, m2);
+    remap(input, output, m1, m2, INTER_CUBIC);
 }
-
-

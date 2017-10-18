@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <opencv_storage>
 	<inputType>"image"</inputType>
-	<inputPath>"/home/xushen/Desktop/MediaSoc/Original/forward"</inputPath>
+	<inputPath>"/home/xushen/CLionProjects/opencv_calib/bin/camera02L"</inputPath>
 	<calibrationFile>"../cfg/default.xml"</calibrationFile>
-	<descriptorType>"surf"</descriptorType>
+	<descriptorType>"sift"</descriptorType>
 </opencv_storage>

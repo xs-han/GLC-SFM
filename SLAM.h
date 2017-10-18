@@ -18,7 +18,7 @@ using namespace std;
 
 class SLAM {
 public:
-    Mat cameraMartix;
+    Mat cameraMatrix;
     cv::Ptr<cv::Feature2D> detector;
     FeatureMatcher matcher;
 

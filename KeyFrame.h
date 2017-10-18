@@ -16,7 +16,7 @@ class MapPoint;
 
 class KeyFrame {
 public:
-    static Mat cameraMartix;
+    static Mat cameraMatrix;
     static cv::Ptr<cv::Feature2D> detector;
     static FeatureMatcher matcher;
     Mat img;
@@ -27,17 +27,13 @@ public:
     Mat desc;
     vector<MapPoint* > mps;
 
-    KeyFrame(Mat newImg);
+    explicit KeyFrame(const Mat & newImg);
+
+    KeyFrame(const Mat& newImg, Mat & R, Mat & t);
 
     KeyFrame(KeyFrame & k) = default;
 
-    bool isFrameKey(const Mat & newFrame);
-
     void computeRT(const vector<KeyFrame> & refKf);
-
-    void detectKps();
-
-    bool isFrameKey(const Mat &newFrame, vector<DMatch> &matches);
 
     const Mat &getRvec() const;
 
@@ -47,6 +43,9 @@ public:
 
     void setTvec(const Mat &tvec);
 
+    bool isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat &newDesc, vector<DMatch> &matches);
+
+    void triangulateNewKeyFrame(const KeyFrame &newFrame, const vector<DMatch> &matches, vector<Point2f> &res);
 };
 
 
