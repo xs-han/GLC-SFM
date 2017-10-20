@@ -65,11 +65,12 @@ bool VideoStream::read(Mat &m) {
     int loops = 0;
     while(!cap.read(frame)){
         loops += 1;
-        if(loops == 5){
+        if(loops == 20){
             break;
         }
     }
-    if(loops == 5){
+    if(loops == 20){
+        cout  << "video is over." << endl;
         finish = true;
         return false;
     }

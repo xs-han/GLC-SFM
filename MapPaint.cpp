@@ -10,7 +10,7 @@ MapPaint::MapPaint() {
 }
 
 void MapPaint::drawPoint(const MapPoint &p) {
-    glPointSize(5.0f);
+    glPointSize(2.0f);
     glBegin(GL_POINTS);
     glColor3f(1.0,1.0,1.0);
     glVertex3f(p.x,p.y,p.z);
@@ -19,19 +19,16 @@ void MapPaint::drawPoint(const MapPoint &p) {
 
 void MapPaint::drawCamera(const KeyFrame &k) {
     //把下面的点都做一次旋转变换
-    float Twc[16];
-    for(int c = 0; c < 3; c++){
-        for(int r = 0; r < 3; r++){
-            Twc[r * 4 + c] = (float)k.rmat.at<double>(r,c);
-        }
-    }
-    Twc[12] = (float)k.tvec.at<double>(0);
-    Twc[13] = (float)k.tvec.at<double>(1);
-    Twc[14] = (float)k.tvec.at<double>(2);
-    Twc[3] = 0; Twc[7] = 0; Twc[11] = 0; Twc[15] = 1;
+    float homodata[] = {0,0,0,1};
+    Mat Twc(4,4,CV_32F), homo(1,4,CV_32F,homodata);
+    k.rmat.convertTo(Twc(Range(0,3), Range(0,3)),CV_32F);
+    k.tvec.convertTo(Twc(Range(0,3), Range(3,4)),CV_32F);
+    homo.convertTo(Twc(Range(3,4), Range(0,4)),CV_32F);
+    Mat TwcT = Twc.t();
+
     glPushMatrix();
     //col major
-    glMultMatrixf(Twc);
+    glMultMatrixf((float*) TwcT.data);
 
     //直线的创建
     const float w = 2;

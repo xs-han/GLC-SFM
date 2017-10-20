@@ -17,23 +17,23 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
     detector->detectAndCompute(newFrame, noArray(), newKps, newDesc );
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
-    return matches.size() < kps.size() * 0.3;
+    return matches.size() < kps.size() * 0.1;
 }
 
-const Mat &KeyFrame::getRmat() const {
-    return rmat;
+void KeyFrame::setRmat(const Mat & R) {
+    if (R.rows == 3 && 3 == R.cols){
+        rmat = R.clone();
+    } else if(R.rows == 1 || R.cols == 1){
+        rmat.create(3,3,CV_64F);
+        Rodrigues(R.clone(), rmat);
+    } else{
+        cout << "Invalid R data." << endl;
+        exit(-2);
+    }
 }
 
-void KeyFrame::setRmat(const Mat &rmat) {
-    KeyFrame::rmat = rmat.clone();
-}
-
-const Mat &KeyFrame::getTvec() const {
-    return tvec;
-}
-
-void KeyFrame::setTvec(const Mat &tvec) {
-    KeyFrame::tvec = tvec.clone();
+void KeyFrame::setTvec(const Mat &t) {
+    tvec = t.clone();
 }
 
 KeyFrame::KeyFrame(const Mat &newImg) {
@@ -50,18 +50,19 @@ KeyFrame::KeyFrame(const Mat& newImg, Mat &R, Mat &t) {
     detector->detectAndCompute(img, noArray(), kps, desc);
     mps.clear();
     mps.resize(kps.size(), nullptr);
-    if (R.rows == 3 && 3 == R.cols){
-        rmat = R.clone();
-    } else if(R.rows == 1 || R.cols == 1){
-        rmat.create(3,3,CV_64F);
-        Rodrigues(R.clone(), rmat);
-    } else{
-        cout << "Invalid R data." << endl;
-        exit(-2);
-    }
-    tvec = t.clone();
+    setRmat(R);
+    setTvec(t);
 }
 
+KeyFrame::KeyFrame(const Mat &newImg, const vector<KeyPoint> &newKps, const Mat &newDesc) {
+    img = newImg.clone();
+    kps = newKps;
+    desc = newDesc.clone();
+    mps.clear();
+    mps.resize(kps.size(), nullptr);
+    rmat = Mat::eye(3,3,CV_64F);
+    tvec = Mat::zeros(3,1,CV_64F);
+}
 
 /**
  From "Triangulation", Hartley, R.I. and Sturm, P., Computer vision and image understanding, 1997
@@ -106,12 +107,10 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     Mat k(3,3,CV_32FC1);
     vector<Point2f> points1(matches.size());
     vector<Point2f> points2(matches.size());
-//    Mat points1(2, matches.size(), CV_64F);
-//    Mat points2(2, matches.size(), CV_64F);
 
+    KeyFrame::cameraMatrix.convertTo(k,CV_32FC1);
     rmat.convertTo(projMatx1(Range(0,3), Range(0,3)), CV_32FC1);
     tvec.convertTo(projMatx1.col(3), CV_32FC1);
-    KeyFrame::cameraMatrix.convertTo(k,CV_32FC1);
     projMatx1 = k * projMatx1;
 
     newFrame.rmat.convertTo(projMatx2(Range(0,3), Range(0,3)), CV_32FC1);
@@ -122,15 +121,32 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     for(const DMatch & m: matches){
         points1[i] = kps[m.queryIdx].pt;
         points2[i] = newFrame.kps[m.trainIdx].pt;
-//        points1.at<double>(0,i) = kps[m.trainIdx].pt.x;
-//        points1.at<double>(1,i) = kps[m.trainIdx].pt.y;
-//        points2.at<double>(0,i) = newFrame.kps[m.queryIdx].pt.x;
-//        points2.at<double>(1,i) = newFrame.kps[m.queryIdx].pt.y;
         i++;
     }
     //LinearLSTriangulation(points1, projMatx1, points2, projMatx2, res);
+    //cout << projMatx1 << endl;
+    //cout << projMatx2 << endl;
     triangulatePoints(projMatx1, projMatx2, points1, points2, res);
 }
 
+void KeyFrame::setMch(const vector<DMatch> &newMatches) {
+    mch = newMatches;
+}
+
+void KeyFrame::computeNewKfRT(KeyFrame &newKf, const vector<DMatch> &mch) {
+    vector<Point3f> obPoints;
+    vector<Point2f> imgPoints;
+    Mat rvec, tvec;
+    for(const DMatch & m : mch){
+        MapPoint * p = mps[m.queryIdx];
+        if(p != nullptr) {
+            obPoints.emplace_back(p->x, p->y, p->z);
+            imgPoints.push_back(newKf.kps[m.trainIdx].pt);
+        }
+    }
+    solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 200, 2.0, 100, noArray(), CV_ITERATIVE);
+    newKf.setRmat(rvec);
+    newKf.setTvec(tvec);
+}
 
 

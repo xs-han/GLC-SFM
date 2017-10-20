@@ -25,6 +25,10 @@ public:
 
     vector<KeyPoint> kps;
     Mat desc;
+    vector<DMatch> mch;
+
+    void setMch(const vector<DMatch> &mch);
+
     vector<MapPoint* > mps;
 
     explicit KeyFrame(const Mat & newImg);
@@ -33,13 +37,11 @@ public:
 
     KeyFrame(KeyFrame & k) = default;
 
-    void computeRT(const vector<KeyFrame> & refKf);
+    KeyFrame(const Mat & newImg, const vector<KeyPoint> & newKps, const Mat & newDesc);
 
-    const Mat &getRmat() const;
+    void computeNewKfRT(KeyFrame & newKf, const vector<DMatch> &mch);
 
     void setRmat(const Mat &rmat);
-
-    const Mat &getTvec() const;
 
     void setTvec(const Mat &tvec);
 

@@ -9,7 +9,7 @@
 #include <pangolin/pangolin.h>
 
 void SLAM::process() {
-    Mat frame;
+
     namedWindow("frames", 0);
     initialize();
     //mPaint.drawMap(allKeyFrames, pointClouds);
@@ -20,7 +20,7 @@ void SLAM::process() {
 
     // Define Projection and initial ModelView matrix
     pangolin::OpenGlRenderState s_cam(
-            pangolin::ProjectionMatrix(640,480,420,420,320,240,0.2,100),
+            pangolin::ProjectionMatrix(1920,1080,1286,1286,978,614,0.2,10000),
             //对应的是gluLookAt,摄像机位置,参考点位置,up vector(上向量)
             pangolin::ModelViewLookAt(0,-10,0.1,0,0,0,pangolin::AxisNegY)
     );
@@ -32,13 +32,38 @@ void SLAM::process() {
     pangolin::View &d_cam = pangolin::CreateDisplay().SetBounds(0.0,1.0,0.0,1.0,-640.0f/480.0f)
             .SetHandler(&handler);
 
+    bool wait = false;
     while (!pangolin::ShouldQuit()){
-        mPaint.drawMap(allKeyFrames, pointClouds);
-        if(*ms >> frame) {
-            Mat undistFrame;
-            undistortFrame(frame, undistFrame);
-            imshow("frames", undistFrame);
-            cvWaitKey(10);
+        Mat frame;
+        if(!wait){
+            if(*ms >> frame) {
+                Mat undistFrame;
+                undistortFrame(frame, undistFrame);
+                frame = undistFrame;
+                imshow("frames", frame);
+                char key = cvWaitKey(10);
+                if(key == 'w') wait = true;
+
+                vector<KeyPoint> newKps;
+                Mat newDesc;
+                vector<DMatch> matches;
+                if (allKeyFrames.back()->isFrameKey(frame, newKps, newDesc, matches)) {
+                    cout << matches.size() << endl;
+                    Mat outimg;
+                    drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, newKps, matches, outimg);
+                    namedWindow("matches",0);
+                    imshow("matches", outimg);
+                    cvWaitKey(0);
+                    destroyWindow("matches");
+                    KeyFrame *k = new KeyFrame(frame, newKps, newDesc);
+                    track(*k, matches);
+                    localmap(*k, matches);
+                }
+            }
+        }
+        else{
+            char key = cvWaitKey(10);
+            if(key == 'w') wait = false;
         }
         // Clear screen and activate view to render into
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -112,8 +137,8 @@ void SLAM::setCameraIntrinsicParams(string calibFile) {
 void SLAM::initialize() {
     Mat frame;
     Mat undistFrame;
-    // wait first 1s;
-    for(int i = 0; i < 31; i++){
+    // Drop first unstable 30 frame;
+    for(int i = 0; i < 30; i++){
         *ms >> frame;
     }
     *ms >> frame;
@@ -131,14 +156,10 @@ void SLAM::initialize() {
         undistortFrame(frame, undistFrame);
         frame = undistFrame.clone();
 
-        vector<Point2f> points1;
-        vector<Point2f> points2;
         Mat res;
         vector<DMatch> matches;
-        vector<KeyPoint> & kps1 = allKeyFrames.back()->kps;
-        Mat & desc1 = allKeyFrames.back()->desc;
-        vector<KeyPoint> kps2;
-        Mat desc2;
+        vector<KeyPoint> & kps1 = allKeyFrames.back()->kps, kps2;
+        Mat & desc1 = allKeyFrames.back()->desc, desc2;
         Mat R, t, mask;
         if(allKeyFrames.back()->isFrameKey(frame, kps2, desc2, matches)){
             Mat outimg;
@@ -147,9 +168,8 @@ void SLAM::initialize() {
             imshow("matches", outimg);
             cvWaitKey(0);
             destroyWindow("matches");
-
-            points1.clear();points2.clear();
-            points1.resize((int)matches.size()); points2.resize((int)matches.size());
+            vector<Point2f> points1(matches.size());
+            vector<Point2f> points2(matches.size());
             int i = 0;
             for(DMatch m : matches){
                 points1[i] = kps1[m.queryIdx].pt;
@@ -157,9 +177,17 @@ void SLAM::initialize() {
                 i++;
             }
             Mat E = findEssentialMat(points1, points2, cameraMatrix.at<double>(0,0), Point2d(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2)), RANSAC, 0.999, 1, mask);
-            double feasible_count = countNonZero(mask);
-            cout << (int)feasible_count << " -in- " << points1.size() << endl;
+            // Check EssentialMat correctness
+            int feasible_count = countNonZero(mask);
+            cout << feasible_count << " -in- " << matches.size() << endl;
+            if(feasible_count < matches.size() * 0.5){
+                cout << "Infeasible  essential matrix. Drop this frame." << endl;
+                continue;
+            }
+
+            assert(cameraMatrix.type() == CV_64F);
             recoverPose(E, points1, points2, R, t, cameraMatrix.at<double>(0,0), Point2d(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2)), mask);
+            cout << t << endl;
             KeyFrame * k1 = new KeyFrame(frame, R, t);
             allKeyFrames.back()->triangulateNewKeyFrame(*k1, matches, res);
             assert((int)matches.size() == res.cols);
@@ -170,7 +198,6 @@ void SLAM::initialize() {
                 Point3f pp((p.at<float>(0) / p.at<float>(3)),
                            (p.at<float>(1) / p.at<float>(3)),
                            (p.at<float>(2) / p.at<float>(3)));
-
                 MapPoint * mp = new MapPoint(pp);
                 mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
                 mp->addKf(*k1, k1->kps[matches[i].trainIdx]);
@@ -190,4 +217,35 @@ void SLAM::undistortFrame(Mat &input, Mat &output) {
     Mat m1, m2;
     initUndistortRectifyMap(cameraMatrix, distortionCoefficient, Mat::eye(3,3,CV_32F), cameraMatrix, input.size(), CV_32F, m1, m2);
     remap(input, output, m1, m2, INTER_CUBIC);
+}
+
+void SLAM::track(KeyFrame & k, const vector <DMatch> & matches) {
+    allKeyFrames.back()->computeNewKfRT(k, matches);
+}
+
+void SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
+    Mat res;
+    allKeyFrames.back()->triangulateNewKeyFrame(k, matches, res);
+    assert((int)matches.size() == res.cols);
+    assert(res.type() == CV_32F);
+
+    for(int i = 0; i < res.cols; i++){
+        Mat p = res.col(i);
+        Point3f pp((p.at<float>(0) / p.at<float>(3)),
+                   (p.at<float>(1) / p.at<float>(3)),
+                   (p.at<float>(2) / p.at<float>(3)));
+        MapPoint * mp = allKeyFrames.back()->mps[matches[i].queryIdx];
+        if(mp == nullptr){
+            mp = new MapPoint(pp);
+            mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
+            mp->addKf(k, k.kps[matches[i].trainIdx]);
+            pointClouds.push_back(mp);
+            allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
+            k.mps[matches[i].trainIdx] = mp;
+        } else{
+            mp->addKf(k, k.kps[matches[i].trainIdx]);
+            k.mps[matches[i].trainIdx] = mp;
+        }
+    }
+    allKeyFrames.push_back(&k);
 }

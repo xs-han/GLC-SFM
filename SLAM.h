@@ -36,17 +36,13 @@ public:
 
     void process();
 
-    bool isFrameKey(const KeyFrame &refKf, const Mat & newFrame);
-
     void initialize();
 
-    void track();
-
-    void localmap();
-
-    void drawMap();
-
     void undistortFrame(Mat &input, Mat &output);
+
+    void track(KeyFrame & k, const vector <DMatch> & matches);
+
+    void localmap(KeyFrame & k, const vector <DMatch> & matches);
 };
 
 
