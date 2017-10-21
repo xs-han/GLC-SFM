@@ -62,7 +62,9 @@ void MapPaint::drawCamera(const KeyFrame &k) {
 void MapPaint::drawMap(const vector<KeyFrame *> &allKeyFrames, const vector<MapPoint *> &pointClouds) {
     for(const KeyFrame * k: allKeyFrames){
         drawCamera(*k);
+        cout << k->computeReprojectionError() << " ";
     }
+    cout << endl;
     for(const MapPoint * p: pointClouds){
         drawPoint(*p);
     }

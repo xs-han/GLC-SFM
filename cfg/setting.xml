@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <opencv_storage>
 	<inputType>"video"</inputType>
-	<inputPath>"/home/xushen/Videos/wide_table.MP4"</inputPath>
+	<inputPath>"/home/xushen/Videos/GOPR0020.MP4"</inputPath>
 	<calibrationFile>"../cfg/calib_gopro_wide.xml"</calibrationFile>
 	<descriptorType>"surf"</descriptorType>
 </opencv_storage>

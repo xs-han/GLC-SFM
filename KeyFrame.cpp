@@ -17,7 +17,7 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
     detector->detectAndCompute(newFrame, noArray(), newKps, newDesc );
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
-    return matches.size() < kps.size() * 0.1;
+    return matches.size() < kps.size() * 0.3;
 }
 
 void KeyFrame::setRmat(const Mat & R) {
@@ -144,9 +144,27 @@ void KeyFrame::computeNewKfRT(KeyFrame &newKf, const vector<DMatch> &mch) {
             imgPoints.push_back(newKf.kps[m.trainIdx].pt);
         }
     }
-    solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 200, 2.0, 100, noArray(), CV_ITERATIVE);
+    solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 200, 5.0, 0.99, noArray(), CV_ITERATIVE);
     newKf.setRmat(rvec);
     newKf.setTvec(tvec);
 }
 
+double KeyFrame::computeReprojectionError()const {
+    vector<Point3f> objectPoints;
+    vector<Point2f> imagePoints;
+    vector<Point2f> imagePoints2;
+    Mat rvec(3,1,CV_32F);
+    Rodrigues(rmat, rvec);
+    for(int i = 0; i < mps.size(); i++){
+        if(mps[i] != nullptr){
+            imagePoints.emplace_back(kps[i].pt);
+            objectPoints.emplace_back(mps[i]->x, mps[i]->y, mps[i]->z);
+        }
+    }
+    double err = 0;
+    projectPoints( Mat(objectPoints), rvec, tvec, cameraMatrix,
+                       noArray(), imagePoints2);
+    err = norm(Mat(imagePoints), Mat(imagePoints2), CV_L2) / sqrt((double)imagePoints.size());
+    return err;
+}
 
