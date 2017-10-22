@@ -102,7 +102,11 @@ void LinearLSTriangulation(const vector<Point2d> uvec,       //homogenous image 
 
 void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
                                       const vector<DMatch> & matches,
-                                      Mat & res) {
+                                      vector<Point3f> & res,
+                                      vector <int> & isGood) {
+    Mat resMat4d;
+    res.clear(); isGood.clear();
+
     Mat projMatx1(3,4,CV_32FC1), projMatx2(3,4,CV_32FC1);
     Mat k(3,3,CV_32FC1);
     vector<Point2f> points1(matches.size());
@@ -126,7 +130,40 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     //LinearLSTriangulation(points1, projMatx1, points2, projMatx2, res);
     //cout << projMatx1 << endl;
     //cout << projMatx2 << endl;
-    triangulatePoints(projMatx1, projMatx2, points1, points2, res);
+    triangulatePoints(projMatx1, projMatx2, points1, points2, resMat4d);
+    assert(resMat4d.type() == CV_32F);
+    for(i = 0; i < resMat4d.cols; i++) {
+        Mat p = resMat4d.col(i);
+        Point3f pp((p.at<float>(0) / p.at<float>(3)),
+                   (p.at<float>(1) / p.at<float>(3)),
+                   (p.at<float>(2) / p.at<float>(3)));
+        res.push_back(pp);
+    }
+    isGood.resize(res.size(), 1);
+
+    Mat rvec1, rvec2; vector<Point2f> imagePoints1, imagePoints2;
+    Rodrigues(rmat, rvec1); Rodrigues(newFrame.rmat, rvec2);
+    projectPoints( res, rvec1, tvec, cameraMatrix, noArray(), imagePoints1);
+    projectPoints( res, rvec2, newFrame.tvec, cameraMatrix, noArray(), imagePoints2);
+    Mat c1 = -1 * rmat.inv() * tvec; c1.convertTo(c1, CV_32F);
+    Mat c2 = -1 * newFrame.rmat.inv() * newFrame.tvec; c2.convertTo(c2, CV_32F);
+    for(i = 0; i < res.size(); i++){
+        if(norm(Mat(points1[i]), Mat(imagePoints1[i])) > 1 ||
+                norm(Mat(points2[i]), Mat(imagePoints2[i])) > 1){
+            isGood[i] = 0;
+        }
+        else{
+            isGood[i] = 1;
+        }
+        Mat p(3,1,CV_32F, {res[i].x, res[i].y, res[i].z});
+        Mat p1 = c1 - p, p2 = c2 - p;
+        double cosAngle = norm(p1.t() * p2) / (norm(p1) * norm(p2));
+        assert(cosAngle <= 1.1);
+        assert(cosAngle >= -1);
+        if(cosAngle > 0.9999 || cosAngle < 0){
+            isGood[i] = 0;
+        }
+    }
 }
 
 void KeyFrame::setMch(const vector<DMatch> &newMatches) {
@@ -144,7 +181,9 @@ void KeyFrame::computeNewKfRT(KeyFrame &newKf, const vector<DMatch> &mch) {
             imgPoints.push_back(newKf.kps[m.trainIdx].pt);
         }
     }
-    solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 200, 5.0, 0.99, noArray(), CV_ITERATIVE);
+    vector<int> inlier;
+    solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 500, 1.0, 0.99, inlier, CV_ITERATIVE);
+    //cout << inlier << endl;
     newKf.setRmat(rvec);
     newKf.setTvec(tvec);
 }

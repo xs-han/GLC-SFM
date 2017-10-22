@@ -24,7 +24,7 @@ void MapPaint::drawCamera(const KeyFrame &k) {
     k.rmat.convertTo(Twc(Range(0,3), Range(0,3)),CV_32F);
     k.tvec.convertTo(Twc(Range(0,3), Range(3,4)),CV_32F);
     homo.convertTo(Twc(Range(3,4), Range(0,4)),CV_32F);
-    Mat TwcT = Twc.t();
+    Mat TwcT = Twc.inv().t();
 
     glPushMatrix();
     //col major

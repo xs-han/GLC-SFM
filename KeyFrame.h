@@ -47,9 +47,10 @@ public:
 
     bool isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat &newDesc, vector<DMatch> &matches);
 
-    void triangulateNewKeyFrame(const KeyFrame &newFrame, const vector<DMatch> &matches, Mat &res);
-
     double computeReprojectionError()const;
+
+    void triangulateNewKeyFrame(const KeyFrame &newFrame, const vector<DMatch> &matches, vector<Point3f> &res,
+                                vector<int> & isGood);
 };
 
 

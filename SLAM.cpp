@@ -49,12 +49,12 @@ void SLAM::process() {
                 vector<DMatch> matches;
                 if (allKeyFrames.back()->isFrameKey(frame, newKps, newDesc, matches)) {
                     cout << matches.size() << endl;
-                    Mat outimg;
-                    drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, newKps, matches, outimg);
-                    namedWindow("matches",0);
-                    imshow("matches", outimg);
-                    cvWaitKey(0);
-                    destroyWindow("matches");
+//                    Mat outimg;
+//                    drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, newKps, matches, outimg);
+//                    namedWindow("matches",0);
+//                    imshow("matches", outimg);
+//                    cvWaitKey(0);
+//                    destroyWindow("matches");
                     KeyFrame *k = new KeyFrame(frame, newKps, newDesc);
                     track(*k, matches);
                     localmap(*k, matches);
@@ -156,18 +156,18 @@ void SLAM::initialize() {
         undistortFrame(frame, undistFrame);
         frame = undistFrame.clone();
 
-        Mat res;
+        vector<Point3f> res; vector<int> isGood;
         vector<DMatch> matches;
         vector<KeyPoint> & kps1 = allKeyFrames.back()->kps, kps2;
         Mat & desc1 = allKeyFrames.back()->desc, desc2;
         Mat R, t, mask;
         if(allKeyFrames.back()->isFrameKey(frame, kps2, desc2, matches)){
-            Mat outimg;
-            drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, kps2, matches, outimg);
-            namedWindow("matches",0);
-            imshow("matches", outimg);
-            cvWaitKey(0);
-            destroyWindow("matches");
+//            Mat outimg;
+//            drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, kps2, matches, outimg);
+//            namedWindow("matches",0);
+//            imshow("matches", outimg);
+//            cvWaitKey(0);
+//            destroyWindow("matches");
             vector<Point2f> points1(matches.size());
             vector<Point2f> points2(matches.size());
             int i = 0;
@@ -189,21 +189,18 @@ void SLAM::initialize() {
             recoverPose(E, points1, points2, R, t, cameraMatrix.at<double>(0,0), Point2d(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2)), mask);
             cout << t << endl;
             KeyFrame * k1 = new KeyFrame(frame, R, t);
-            allKeyFrames.back()->triangulateNewKeyFrame(*k1, matches, res);
-            assert((int)matches.size() == res.cols);
-            assert(res.type() == CV_32F);
-            cout << res << endl;
-            for(i = 0; i < res.cols; i++){
-                Mat p = res.col(i);
-                Point3f pp((p.at<float>(0) / p.at<float>(3)),
-                           (p.at<float>(1) / p.at<float>(3)),
-                           (p.at<float>(2) / p.at<float>(3)));
-                MapPoint * mp = new MapPoint(pp);
-                mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
-                mp->addKf(*k1, k1->kps[matches[i].trainIdx]);
-                pointClouds.push_back(mp);
-                allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
-                k1->mps[matches[i].trainIdx] = mp;
+            allKeyFrames.back()->triangulateNewKeyFrame(*k1, matches, res, isGood);
+            assert((int)matches.size() == res.size());
+
+            for(i = 0; i < res.size(); i++){
+                if(isGood[i] == 1) {
+                    MapPoint *mp = new MapPoint(res[i]);
+                    mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
+                    mp->addKf(*k1, k1->kps[matches[i].trainIdx]);
+                    pointClouds.push_back(mp);
+                    allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
+                    k1->mps[matches[i].trainIdx] = mp;
+                }
             }
             allKeyFrames.push_back(k1);
 
@@ -224,24 +221,23 @@ void SLAM::track(KeyFrame & k, const vector <DMatch> & matches) {
 }
 
 void SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
-    Mat res;
-    allKeyFrames.back()->triangulateNewKeyFrame(k, matches, res);
-    assert((int)matches.size() == res.cols);
-    assert(res.type() == CV_32F);
+    vector<Point3f> res;
+    vector<int> isGood;
+    allKeyFrames.back()->triangulateNewKeyFrame(k, matches, res, isGood);
+    assert(matches.size() == res.size());
 
-    for(int i = 0; i < res.cols; i++){
-        Mat p = res.col(i);
-        Point3f pp((p.at<float>(0) / p.at<float>(3)),
-                   (p.at<float>(1) / p.at<float>(3)),
-                   (p.at<float>(2) / p.at<float>(3)));
+    for(int i = 0; i < res.size(); i++){
+
         MapPoint * mp = allKeyFrames.back()->mps[matches[i].queryIdx];
         if(mp == nullptr){
-            mp = new MapPoint(pp);
-            mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
-            mp->addKf(k, k.kps[matches[i].trainIdx]);
-            pointClouds.push_back(mp);
-            allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
-            k.mps[matches[i].trainIdx] = mp;
+            if(isGood[i] == 1) {
+                mp = new MapPoint(res[i]);
+                mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
+                mp->addKf(k, k.kps[matches[i].trainIdx]);
+                pointClouds.push_back(mp);
+                allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
+                k.mps[matches[i].trainIdx] = mp;
+            }
         } else{
             mp->addKf(k, k.kps[matches[i].trainIdx]);
             k.mps[matches[i].trainIdx] = mp;
