@@ -4,4 +4,6 @@
 	<inputPath>"/home/xushen/Videos/GOPR0021.MP4"</inputPath>
 	<calibrationFile>"../cfg/calib_gopro_wide.xml"</calibrationFile>
 	<descriptorType>"surf"</descriptorType>
+	<imageScale>3</imageScale>
+	<rectified>0</rectified>
 </opencv_storage>

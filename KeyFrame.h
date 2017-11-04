@@ -19,9 +19,12 @@ public:
     static Mat cameraMatrix;
     static cv::Ptr<cv::Feature2D> detector;
     static FeatureMatcher matcher;
+    static int nKeyFrames;
     Mat img;
     Mat rmat;
     Mat tvec;
+
+    int kfId;
 
     vector<KeyPoint> kps;
     Mat desc;
@@ -39,7 +42,7 @@ public:
 
     KeyFrame(const Mat & newImg, const vector<KeyPoint> & newKps, const Mat & newDesc);
 
-    void computeNewKfRT(KeyFrame & newKf, const vector<DMatch> &mch);
+    void computeNewKfRT(KeyFrame & newKf, const vector<DMatch> &mch, vector<int> & inliers);
 
     void setRmat(const Mat &rmat);
 

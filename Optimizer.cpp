@@ -3,17 +3,272 @@
 //
 
 #include "Optimizer.h"
+#include <opencv2/core/eigen.hpp>
 
-void Optimizer::LocalBundleAdjustment(KeyFrame *pKF) {
-    // Setup optimizer
-    g2o::SparseOptimizer    optimizer;
-    // 使用Cholmod中的线性方程求解器
-    g2o::BlockSolver_6_3::LinearSolverType* linearSolver = new  g2o::LinearSolverCholmod<g2o::BlockSolver_6_3::PoseMatrixType> ();
-    // 6*3 的参数
-    g2o::BlockSolver_6_3* block_solver = new g2o::BlockSolver_6_3( linearSolver );
-    // L-M 下降
-    g2o::OptimizationAlgorithmLevenberg* algorithm = new g2o::OptimizationAlgorithmLevenberg( block_solver );
+using namespace Eigen;
+using namespace std;
+using namespace cv;
 
-    optimizer.setAlgorithm( algorithm );
-    optimizer.setVerbose( false );
+void Optimizer::GlobalBundleAdjustment(vector <KeyFrame *> & kfs, vector <MapPoint *> & pc, Mat & cameraMatrix) {
+    bool ROBUST_KERNEL = true;
+    bool STRUCTURE_ONLY = false;
+    bool DENSE = false;
+
+    cout << "ROBUST_KERNEL: " << ROBUST_KERNEL << endl;
+    cout << "STRUCTURE_ONLY: " << STRUCTURE_ONLY<< endl;
+    cout << "DENSE: "<<  DENSE << endl;
+
+    g2o::SparseOptimizer optimizer;
+    optimizer.setVerbose(false);
+    std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linearSolver;
+    if (DENSE) {
+        linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    } else {
+        linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    }
+    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(
+            g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))
+    );
+    optimizer.setAlgorithm(solver);
+
+    // camera matrix
+    assert(cameraMatrix.type() == CV_64F);
+    double focal_length= (cameraMatrix.at<double>(0,0) + cameraMatrix.at<double>(1,1)) / 2;
+    Vector2d principal_point(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2));
+    g2o::CameraParameters * cam_params = new g2o::CameraParameters (focal_length, principal_point, 0.);
+    cam_params->setId(0);
+    if (!optimizer.addParameter(cam_params)) {
+        assert(false);
+    }
+
+    vector<g2o::SE3Quat, aligned_allocator<g2o::SE3Quat> > true_poses;
+    int vertex_id = 0;
+    for (size_t i=0; i<kfs.size(); ++i) {
+        Eigen::Matrix3d r;
+        cv::cv2eigen(kfs[i]->rmat, r);
+        Eigen::Quaterniond q(r);
+
+        assert(kfs[i]->tvec.type() == CV_64F);
+        Vector3d trans(kfs[i]->tvec.at<double>(0),
+                       kfs[i]->tvec.at<double>(1),
+                       kfs[i]->tvec.at<double>(2));
+        g2o::SE3Quat pose(q,trans);
+        g2o::VertexSE3Expmap * v_se3 = new g2o::VertexSE3Expmap();
+        v_se3->setId(kfs[i]->kfId);
+        if (i<2){
+            v_se3->setFixed(true);
+        }
+        v_se3->setEstimate(pose);
+        optimizer.addVertex(v_se3);
+        true_poses.push_back(pose);
+        vertex_id++;
+    }
+
+    int true_id=vertex_id;
+
+    unordered_map<int,int> pointid_2_trueid;
+    for(int i = 0; i < pc.size(); i++){
+        if(pc[i]->good) {
+            pointid_2_trueid.insert(make_pair(i,true_id));
+            g2o::VertexSBAPointXYZ *v_p = new g2o::VertexSBAPointXYZ();
+            v_p->setId(true_id);
+            v_p->setMarginalized(true);
+            v_p->setEstimate(Vector3d(pc[i]->x, pc[i]->y, pc[i]->z));
+
+            optimizer.addVertex(v_p);
+            for(int j = 0; j < pc[i]->kfs.size(); j++){
+                Point2f & p = pc[i]->kfs[j]->kps[pc[i]->kps[j]].pt;
+                Vector2d z(p.x, p.y);
+
+                g2o::EdgeProjectXYZ2UV * e = new g2o::EdgeProjectXYZ2UV();
+                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(v_p));
+                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>
+                (optimizer.vertices().find(pc[i]->kfs[j]->kfId)->second));
+                e->setMeasurement(z);
+                e->information() = Matrix2d::Identity();
+                if (ROBUST_KERNEL) {
+                    g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+                    e->setRobustKernel(rk);
+                }
+                e->setParameterId(0, 0);
+                optimizer.addEdge(e);
+            }
+
+            true_id++;
+        }
+    }
+
+    optimizer.initializeOptimization();
+    optimizer.setVerbose(true);
+    if (STRUCTURE_ONLY){
+        g2o::StructureOnlySolver<3> structure_only_ba;
+        cout << "Performing structure-only BA:"   << endl;
+        g2o::OptimizableGraph::VertexContainer points;
+        for (g2o::OptimizableGraph::VertexIDMap::const_iterator it = optimizer.vertices().begin(); it != optimizer.vertices().end(); ++it) {
+            g2o::OptimizableGraph::Vertex* v = static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+            if (v->dimension() == 3)
+                points.push_back(v);
+        }
+        structure_only_ba.calc(points, 10);
+    }
+    optimizer.optimize(10);
+
+    for(int i = 0; i < pc.size(); i++){
+        if(pc[i]->good){
+            int true_id = pointid_2_trueid[i];
+            g2o::HyperGraph::VertexIDMap::iterator v_it
+                    = optimizer.vertices().find(true_id);
+            if (v_it==optimizer.vertices().end()){
+                cerr << "Vertex " << true_id << " not in graph!" << endl;
+                exit(-1);
+            }
+            g2o::VertexSBAPointXYZ * v_p
+                    = dynamic_cast< g2o::VertexSBAPointXYZ * > (v_it->second);
+            if (v_p==0){
+                cerr << "Vertex " << true_id << "is not a PointXYZ!" << endl;
+                exit(-1);
+            }
+            Vector3d newp = v_p->estimate();
+            pc[i]->x = newp(0); pc[i]->y = newp(1); pc[i]->z = newp(2);
+        }
+    }
+
+    for(int i = 0; i < kfs.size(); i++){
+        g2o::HyperGraph::VertexIDMap::iterator v_it
+                = optimizer.vertices().find(kfs[i]->kfId);
+        if (v_it==optimizer.vertices().end()){
+            cerr << "Frame Vertex " << kfs[i]->kfId << " not in graph!" << endl;
+            exit(-1);
+        }
+        g2o::VertexSE3Expmap * v_se3
+                = dynamic_cast< g2o::VertexSE3Expmap * > (v_it->second);
+        if (v_se3==0){
+            cerr << "Frame Vertex " << kfs[i]->kfId << "is not a PointXYZ!" << endl;
+            exit(-1);
+        }
+        g2o::SE3Quat newpose = v_se3->estimate();
+        Eigen::Matrix3d r = newpose.rotation().matrix();
+        Eigen::Vector3d trans = newpose.translation();
+        Mat Rmat; eigen2cv(r, Rmat);
+        Mat tvec(3,1,CV_64F);
+        tvec.at<double>(0) = trans(0);tvec.at<double>(1) = trans(1);tvec.at<double>(2) = trans(2);
+        kfs[i]->setRmat(Rmat.clone());
+        kfs[i]->setTvec(tvec.clone());
+    }
+
+
+
+
+
+
+//
+//    cout << endl;
+//    unordered_map<int,int> pointid_2_trueid;
+//    unordered_set<int> inliers;
+//
+//    for (size_t i=0; i<true_points.size(); ++i){
+//        g2o::VertexSBAPointXYZ * v_p
+//                = new g2o::VertexSBAPointXYZ();
+//        v_p->setId(true_id);
+//        v_p->setMarginalized(true);
+//        v_p->setEstimate(true_points.at(i)
+//                         + Vector3d(Sample::gaussian(1),
+//                                    Sample::gaussian(1),
+//                                    Sample::gaussian(1)));
+//        int num_obs = 0;
+//        for (size_t j=0; j<true_poses.size(); ++j){
+//            Vector2d z = cam_params->cam_map(true_poses.at(j).map(true_points.at(i)));
+//            if (z[0]>=0 && z[1]>=0 && z[0]<640 && z[1]<480){
+//                ++num_obs;
+//            }
+//        }
+//        if (num_obs>=2){
+//            optimizer.addVertex(v_p);
+//            bool inlier = true;
+//            for (size_t j=0; j<true_poses.size(); ++j){
+//                Vector2d z
+//                        = cam_params->cam_map(true_poses.at(j).map(true_points.at(i)));
+//
+//                if (z[0]>=0 && z[1]>=0 && z[0]<640 && z[1]<480){
+//                    double sam = Sample::uniform();
+//                    if (sam<OUTLIER_RATIO){
+//                        z = Vector2d(Sample::uniform(0,640),
+//                                     Sample::uniform(0,480));
+//                        inlier= false;
+//                    }
+//                    z += Vector2d(Sample::gaussian(PIXEL_NOISE),
+//                                  Sample::gaussian(PIXEL_NOISE));
+//                    g2o::EdgeProjectXYZ2UV * e
+//                            = new g2o::EdgeProjectXYZ2UV();
+//                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(v_p));
+//                    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>
+//                    (optimizer.vertices().find(j)->second));
+//                    e->setMeasurement(z);
+//                    e->information() = Matrix2d::Identity();
+//                    if (ROBUST_KERNEL) {
+//                        g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+//                        e->setRobustKernel(rk);
+//                    }
+//                    e->setParameterId(0, 0);
+//                    optimizer.addEdge(e);
+//                }
+//            }
+//
+//            if (inlier){
+//                inliers.insert(true_id);
+//                Vector3d diff = v_p->estimate() - true_points[i];
+//
+//                sum_diff2 += diff.dot(diff);
+//            }
+//            pointid_2_trueid.insert(make_pair(true_id,i));
+//            ++true_id;
+//            ++point_num;
+//        }
+//    }
+//    cout << endl;
+//    optimizer.initializeOptimization();
+//    optimizer.setVerbose(true);
+//
+//    if (STRUCTURE_ONLY){
+//        g2o::StructureOnlySolver<3> structure_only_ba;
+//        cout << "Performing structure-only BA:"   << endl;
+//        g2o::OptimizableGraph::VertexContainer points;
+//        for (g2o::OptimizableGraph::VertexIDMap::const_iterator it = optimizer.vertices().begin(); it != optimizer.vertices().end(); ++it) {
+//            g2o::OptimizableGraph::Vertex* v = static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+//            if (v->dimension() == 3)
+//                points.push_back(v);
+//        }
+//        structure_only_ba.calc(points, 10);
+//    }
+//    //optimizer.save("test.g2o");
+//    cout << endl;
+//    cout << "Performing full BA:" << endl;
+//    optimizer.optimize(10);
+//    cout << endl;
+//    cout << "Point error before optimisation (inliers only): " << sqrt(sum_diff2/point_num) << endl;
+//    point_num = 0;
+//    sum_diff2 = 0;
+//    for (unordered_map<int,int>::iterator it=pointid_2_trueid.begin();
+//         it!=pointid_2_trueid.end(); ++it){
+//        g2o::HyperGraph::VertexIDMap::iterator v_it
+//                = optimizer.vertices().find(it->first);
+//        if (v_it==optimizer.vertices().end()){
+//            cerr << "Vertex " << it->first << " not in graph!" << endl;
+//            exit(-1);
+//        }
+//        g2o::VertexSBAPointXYZ * v_p
+//                = dynamic_cast< g2o::VertexSBAPointXYZ * > (v_it->second);
+//        if (v_p==0){
+//            cerr << "Vertex " << it->first << "is not a PointXYZ!" << endl;
+//            exit(-1);
+//        }
+//        Vector3d diff = v_p->estimate()-true_points[it->second];
+//        if (inliers.find(it->first)==inliers.end())
+//            continue;
+//        sum_diff2 += diff.dot(diff);
+//        ++point_num;
+//    }
+//    optimizer.parameter(0)->write(cout); cout << endl;
+//    cout << "Point error after optimisation (inliers only): " << sqrt(sum_diff2/point_num) << endl;
+//    cout << endl;
 }

@@ -7,6 +7,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core.hpp>
 #include <pangolin/pangolin.h>
+#include "Optimizer.h"
 
 void SLAM::process() {
 
@@ -58,6 +59,7 @@ void SLAM::process() {
                     KeyFrame *k = new KeyFrame(frame, newKps, newDesc);
                     track(*k, matches);
                     localmap(*k, matches);
+                    Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, cameraMatrix);
                 }
             }
         }
@@ -92,6 +94,8 @@ SLAM::SLAM(string settingFile) {
     fs["inputPath"] >> inputPath;
     fs["calibrationFile"] >> calibFile;
     fs["descriptorType"] >> descType;
+    fs["imageScale"] >>imageScale;
+    fs["rectified"] >> rectified;
 
     if(inputType == "image"){
         ms = new ImageStream(inputPath);
@@ -106,7 +110,7 @@ SLAM::SLAM(string settingFile) {
     if (descType=="orb")        detector=cv::ORB::create(500);
     else if (descType=="brisk") detector=cv::BRISK::create();
     else if (descType=="akaze") detector=cv::AKAZE::create();
-    else if(descType=="surf" )  detector=cv::xfeatures2d::SURF::create(500);
+    else if(descType=="surf" )  detector=cv::xfeatures2d::SURF::create(50, 6, 4, true);
     else if(descType=="sift" )  detector=cv::xfeatures2d::SIFT::create(500);
     else throw std::runtime_error("Invalid descriptor");
     assert(!descType.empty());
@@ -129,8 +133,19 @@ void SLAM::setCameraIntrinsicParams(string calibFile) {
     //cameraMatrix.convertTo(cameraMatrix, CV_32F);
     //distortionCoefficient.convertTo(distortionCoefficient,CV_32F);
 
-    KeyFrame::cameraMatrix = cameraMatrix.clone();
-    cout << "Set camera martix:" << endl << cameraMatrix << endl;
+    int imageWidth, imageHeight;
+    fs["image_Width"] >> imageWidth;
+    fs["image_Height"] >> imageHeight;
+    Size inputSize(imageWidth, imageHeight);
+    newCameraMatrix = getOptimalNewCameraMatrix(cameraMatrix, distortionCoefficient, inputSize, 1, inputSize);
+    cout << cameraMatrix << endl << newCameraMatrix << endl;
+    initUndistortRectifyMap(cameraMatrix, distortionCoefficient,Mat(), Mat(), inputSize, CV_32F, m1, m2);
+
+    Mat frameCameraMatrix = cameraMatrix.clone() / imageScale;
+    frameCameraMatrix.at<double>(2,2) = 1;
+    KeyFrame::cameraMatrix = frameCameraMatrix.clone();
+    cameraMatrix = frameCameraMatrix.clone();
+    cout << "Set camera martix:" << endl << KeyFrame::cameraMatrix << endl;
     cout << "Set distortion coefficients: " << endl << distortionCoefficient << endl;
 }
 
@@ -195,8 +210,8 @@ void SLAM::initialize() {
             for(i = 0; i < res.size(); i++){
                 if(isGood[i] == 1) {
                     MapPoint *mp = new MapPoint(res[i]);
-                    mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
-                    mp->addKf(*k1, k1->kps[matches[i].trainIdx]);
+                    mp->addKf(*allKeyFrames.back(), matches[i].queryIdx);
+                    mp->addKf(*k1, matches[i].trainIdx);
                     pointClouds.push_back(mp);
                     allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
                     k1->mps[matches[i].trainIdx] = mp;
@@ -211,13 +226,37 @@ void SLAM::initialize() {
 }
 
 void SLAM::undistortFrame(Mat &input, Mat &output) {
-    Mat m1, m2;
-    initUndistortRectifyMap(cameraMatrix, distortionCoefficient, Mat::eye(3,3,CV_32F), cameraMatrix, input.size(), CV_32F, m1, m2);
-    remap(input, output, m1, m2, INTER_CUBIC);
+    if(rectified){
+        output = input.clone();
+    }else {
+        remap(input, output, m1, m2, INTER_CUBIC);
+    }
+    if(imageScale != 1){
+        resize(output, output, input.size()/imageScale);
+    }
 }
 
 void SLAM::track(KeyFrame & k, const vector <DMatch> & matches) {
-    allKeyFrames.back()->computeNewKfRT(k, matches);
+    vector<int> inliers;
+    allKeyFrames.back()->computeNewKfRT(k, matches, inliers);
+    int nextInlier = inliers[0], j = 0;
+
+    for(int i = 0; i < matches.size(); i++){
+        if(i == nextInlier){
+            j+=1;
+            if(j < inliers.size()) {
+                nextInlier = inliers[j];
+            }
+        } else{
+            MapPoint * mp = allKeyFrames.back()->mps[matches[i].queryIdx];
+            if(mp != nullptr){
+                mp->correctMapPoint(&k, matches[i].trainIdx);
+            }
+        }
+    }
+    inliers.clear();
+    allKeyFrames.back()->computeNewKfRT(k, matches, inliers);
+    cout << endl << "match size: " << matches.size() << ", inlier size: " << inliers.size() << endl;
 }
 
 void SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
@@ -232,14 +271,14 @@ void SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
         if(mp == nullptr){
             if(isGood[i] == 1) {
                 mp = new MapPoint(res[i]);
-                mp->addKf(*allKeyFrames.back(), allKeyFrames.back()->kps[matches[i].queryIdx]);
-                mp->addKf(k, k.kps[matches[i].trainIdx]);
+                mp->addKf(*allKeyFrames.back(), matches[i].queryIdx);
+                mp->addKf(k, matches[i].trainIdx);
                 pointClouds.push_back(mp);
                 allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
                 k.mps[matches[i].trainIdx] = mp;
             }
         } else{
-            mp->addKf(k, k.kps[matches[i].trainIdx]);
+            mp->addKf(k, matches[i].trainIdx);
             k.mps[matches[i].trainIdx] = mp;
         }
     }

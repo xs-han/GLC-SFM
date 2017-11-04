@@ -66,7 +66,8 @@ void MapPaint::drawMap(const vector<KeyFrame *> &allKeyFrames, const vector<MapP
     }
     cout << endl;
     for(const MapPoint * p: pointClouds){
-        drawPoint(*p);
+        if(p->good)
+            drawPoint(*p);
     }
     // Swap frames and Process Events
 }

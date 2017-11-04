@@ -19,7 +19,10 @@ using namespace std;
 
 class SLAM {
 public:
+    bool rectified;
+    int imageScale;
     Mat cameraMatrix;
+    Mat m1, m2, newCameraMatrix;
     cv::Ptr<cv::Feature2D> detector;
     FeatureMatcher matcher;
 
