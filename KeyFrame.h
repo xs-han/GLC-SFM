@@ -54,6 +54,10 @@ public:
 
     void triangulateNewKeyFrame(const KeyFrame &newFrame, const vector<DMatch> &matches, vector<Point3f> &res,
                                 vector<int> & isGood);
+
+    void drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const DMatch & m);
+
+    void drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const vector<DMatch> & m);
 };
 
 

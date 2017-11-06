@@ -19,7 +19,7 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
     detector->detectAndCompute(newFrame, noArray(), newKps, newDesc );
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
-    return matches.size() < kps.size() * 0.15;
+    return matches.size() < kps.size() * 0.1;
 }
 
 void KeyFrame::setRmat(const Mat & R) {
@@ -101,6 +101,7 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
 
     isGood.resize(points1.size(), 1);
     int nGood = points1.size();
+    cout << "matches: " << points1.size() << endl;
 //    Mat resMat4d;
 //    triangulatePoints(projMatx1, projMatx2, points1, points2, resMat4d);
 //    assert(resMat4d.type() == CV_32F);
@@ -122,6 +123,7 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     sfm::triangulatePoints(point2d, projection_matrices, point3d);
     assert(point3d.type()==CV_64F);
 
+    vector<DMatch> badmatches;
     for(i = 0; i < point3d.cols; i++) {
         Mat p = point3d.col(i);
         Point3f pp((float)(p.at<double>(0)),
@@ -135,9 +137,11 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
         if(pp1local.at<double>(2) < 0 || pp2local.at<double>(2) < 0){
             isGood[i] = 0;
             nGood--;
+            badmatches.push_back(matches[i]);
         }
     }
     cout << "good trianglation: " << nGood << endl;
+    //drawFrameMatches(*this, newFrame, badmatches);
 
 
     Mat rvec1, rvec2; vector<Point2f> imagePoints1, imagePoints2;
@@ -152,6 +156,7 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
                 norm(Mat(points2[i]), Mat(imagePoints2[i])) > 1) {
                 isGood[i] = 0;
                 nGood--;
+                badmatches.push_back(matches[i]);
                 continue;
             } else {
                 isGood[i] = 1;
@@ -162,12 +167,21 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
             double cosAngle = norm(p1.t() * p2) / (norm(p1) * norm(p2));
             assert(cosAngle <= 1.1);
             assert(cosAngle >= -1);
-            if (cosAngle > 0.995 || cosAngle < 0) {
+            if (cosAngle > 1 || cosAngle < 0) {
                 isGood[i] = 0;
                 nGood--;
+                badmatches.push_back(matches[i]);
             }
         }
     }
+
+//    vector<DMatch> goodmatches;
+//    for(int i = 0; i < isGood.size(); i++){
+//        if(isGood[i]){
+//            goodmatches.push_back(matches[i]);
+//        }
+//    }
+//    drawFrameMatches(*this, newFrame, goodmatches);
     cout << "successful trianglation: " << nGood << endl;
 }
 
@@ -211,3 +225,23 @@ double KeyFrame::computeReprojectionError()const {
     return err;
 }
 
+
+void KeyFrame::drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const DMatch & m){
+    vector<DMatch> vm;
+    vm.push_back(m);
+    Mat out;
+    drawMatches(f1.img, f1.kps, f2.img, f2.kps, vm, out);
+    namedWindow("single match", 0);
+    imshow("single match", out);
+    cvWaitKey(0);
+    destroyWindow("single match");
+}
+
+void KeyFrame::drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const vector<DMatch> & m){
+    Mat out;
+    drawMatches(f1.img, f1.kps, f2.img, f2.kps, m, out);
+    namedWindow("multiple matches", 0);
+    imshow("multiple matches", out);
+    cvWaitKey(0);
+    destroyWindow("multiple matches");
+}

@@ -50,7 +50,9 @@ bool ImageStream::read(Mat &m) {
     if(!finish){
         m = imread(*currentImagePtr);
         currentImagePtr++;
-        finish = currentImagePtr == allImages.end();
+        if(*currentImagePtr == allImages.back()){
+            finish = true;
+        }
         return true;
     } else{
         return false;

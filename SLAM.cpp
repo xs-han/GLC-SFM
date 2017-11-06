@@ -59,7 +59,28 @@ void SLAM::process() {
                     KeyFrame *k = new KeyFrame(frame, newKps, newDesc);
                     track(*k, matches);
                     localmap(*k, matches);
-                    Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, cameraMatrix);
+
+                    vector<KeyFrame * > localFrames;
+                    vector<MapPoint * > localPoints;
+                    localFrames.push_back(*(allKeyFrames.end()-3));
+                    localFrames.push_back(*(allKeyFrames.end()-2));
+                    localFrames.push_back(*(allKeyFrames.end()-1));
+                    for(KeyFrame * kf: localFrames){
+                        for(MapPoint * p : kf->mps) {
+                            if(p== nullptr || (!p->good)){
+                                continue;
+                            }
+                            if(find(localPoints.begin(), localPoints.end(), p) == localPoints.end()) {
+                                localPoints.push_back(p);
+                            }
+                        }
+                    }
+
+                    Optimizer::GlobalBundleAdjustment(localFrames, localPoints, KeyFrame::cameraMatrix, 10);
+
+                    if(allKeyFrames.back()->kfId % 5 == 0){
+                        Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 30);
+                    }
                 }
             }
         }

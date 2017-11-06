@@ -27,7 +27,7 @@
 
 class Optimizer {
 public:
-    static void GlobalBundleAdjustment(vector<KeyFrame *> &kfs, vector<MapPoint *> & pc,Mat & cameraMatrix);
+    static void GlobalBundleAdjustment(vector<KeyFrame *> &kfs, vector<MapPoint *> &pc, Mat &cameraMatrix, int iter);
 };
 
 
