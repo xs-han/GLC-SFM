@@ -19,7 +19,7 @@ private:
 
     // pointer to the matcher object
     cv::Ptr<cv::DescriptorMatcher > matcher;
-
+public:
     float ratio; // max ratio between 1st and 2nd NN
     bool refineF; // if true will refine the F matrix
     double distance; // min distance to epipolar

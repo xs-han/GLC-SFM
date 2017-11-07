@@ -308,13 +308,19 @@ cv::Mat FeatureMatcher::match(std::vector<cv::KeyPoint>& keypoints1, // input co
     symmetryTest(matches1,matches2,symMatches);
 
     // 5. Validate matches using RANSAC
-    cv::Mat fundamental= ransacTest(symMatches,
-                                    keypoints1,
-                                    keypoints2,
-                                    matches,
-                                    points1,
-                                    points2);
-    // return the found fundamental matrix
+    cv::Mat fundamental;
+    if(refineF) {
+        fundamental = ransacTest(symMatches,
+                                         keypoints1,
+                                         keypoints2,
+                                         matches,
+                                         points1,
+                                         points2);
+        // return the found fundamental matrix
+    } else{
+        fundamental = cv::Mat();
+        matches = symMatches;
+    }
     return fundamental;
 }
 

@@ -12,7 +12,11 @@ MapPaint::MapPaint() {
 void MapPaint::drawPoint(const MapPoint &p) {
     glPointSize(2.0f);
     glBegin(GL_POINTS);
-    glColor3f(1.0,1.0,1.0);
+    if(p.colored) {
+        glColor3f(p.color[0] / (float)255.0, p.color[1] / (float)255.0, p.color[2] / (float)255.0);
+    } else {
+        glColor3f(1.0, 1.0, 1.0);
+    }
     glVertex3f(p.x,p.y,p.z);
     glEnd();
 }
@@ -31,7 +35,7 @@ void MapPaint::drawCamera(const KeyFrame &k) {
     glMultMatrixf((float*) TwcT.data);
 
     //直线的创建
-    const float w = 2;
+    const float w = 0.5;
     const float h = w*0.75;
     const float z = w*0.6;
     glLineWidth(2);
@@ -60,6 +64,8 @@ void MapPaint::drawCamera(const KeyFrame &k) {
 }
 
 void MapPaint::drawMap(const vector<KeyFrame *> &allKeyFrames, const vector<MapPoint *> &pointClouds) {
+    if(pointClouds.back()->colored)
+        glClearColor(1.0f,1.0f,1.0f,1.0f);
     for(const KeyFrame * k: allKeyFrames){
         drawCamera(*k);
         cout << k->computeReprojectionError() << " ";

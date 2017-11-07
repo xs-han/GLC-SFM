@@ -16,14 +16,17 @@ class KeyFrame;
 class MapPoint {
 public:
     float x, y, z;
+    int color[3];
+    bool colored;
 
     bool good;
     vector<KeyFrame *> kfs;
     vector<int> kps;
 
-    explicit MapPoint(const Point3f & p):x(p.x), y(p.y), z(p.z), good(true){kfs.clear(); kps.clear();};
-    MapPoint(float x1, float y1, float z1):x(x1), y(y1), z(z1), good(true){};
-    void addKf(KeyFrame & f, int p){kfs.push_back(&f); kps.push_back(p);}
+    explicit MapPoint(const Point3f & p):x(p.x), y(p.y), z(p.z), good(true), colored(false){kfs.clear(); kps.clear();};
+    MapPoint(float x1, float y1, float z1):x(x1), y(y1), z(z1), good(true), colored(false){};
+    void addKf(KeyFrame & f, int p);
+    void addKf(KeyFrame & f, int p, bool coloredMap);
     void deleteMapPoint();
 
     friend ostream &operator<<(ostream &os, const MapPoint &point) {
@@ -36,6 +39,10 @@ public:
     bool isGood(KeyFrame *f, int kp, double err);
 
     bool correctMapPoint(KeyFrame *newKf, int kp);
+
+    void setColor(int r, int g, int b);
+
+    void addColor(int r, int g, int b);
 };
 
 

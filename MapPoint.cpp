@@ -66,3 +66,31 @@ bool MapPoint::isGood(KeyFrame * f, int kp, double err){
     projectPoints(p, rvec, tvec, f->cameraMatrix, noArray(), imagePoints);
     return norm(Mat(f->kps[kp].pt), Mat(imagePoints[0])) <= err;
 }
+
+void MapPoint::setColor(int r, int g, int b) {
+    color[0] = r; color[0] = g; color[0] = b;
+    colored = true;
+}
+
+void MapPoint::addColor(int r, int g, int b) {
+    if(colored){
+        color[0] = r;
+        color[1] = g;
+        color[2] = b;
+    } else{
+        setColor(r,g,b);
+    }
+}
+
+void MapPoint::addKf(KeyFrame &f, int p) {
+    kfs.push_back(&f); kps.push_back(p);
+}
+
+void MapPoint::addKf(KeyFrame &f, int p, bool coloredMap) {
+    kfs.push_back(&f); kps.push_back(p);
+    if(coloredMap){
+        Vec3b col = f.img.at<Vec3b>(f.kps[p].pt.y, f.kps[p].pt.x);
+        addColor(col.val[2], col.val[1], col.val[0]);
+    }
+}
+

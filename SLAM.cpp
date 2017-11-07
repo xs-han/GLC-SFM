@@ -16,6 +16,7 @@ void SLAM::process() {
     //mPaint.drawMap(allKeyFrames, pointClouds);
     //创建一个窗口
     pangolin::CreateWindowAndBind("Main",640,480);
+
     //启动深度测试
     glEnable(GL_DEPTH_TEST);
 
@@ -34,7 +35,8 @@ void SLAM::process() {
             .SetHandler(&handler);
 
     bool wait = false;
-    while (!pangolin::ShouldQuit()){
+    bool quit = false;
+    while (!pangolin::ShouldQuit() && !quit){
         Mat frame;
         if(!wait){
             if(*ms >> frame) {
@@ -79,10 +81,15 @@ void SLAM::process() {
                     Optimizer::GlobalBundleAdjustment(localFrames, localPoints, KeyFrame::cameraMatrix, 10);
 
                     if(allKeyFrames.back()->kfId % 5 == 0){
-                        Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 30);
+                        Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 15);
                     }
                 }
+            } else{
+                char key = cvWaitKey(10);
+                if(key == 'q') quit = true;
+                if(key == 'w') wait = true;
             }
+
         }
         else{
             char key = cvWaitKey(10);
@@ -117,6 +124,7 @@ SLAM::SLAM(string settingFile) {
     fs["descriptorType"] >> descType;
     fs["imageScale"] >>imageScale;
     fs["rectified"] >> rectified;
+    fs["coloredMap"] >> coloredMap;
 
     if(inputType == "image"){
         ms = new ImageStream(inputPath);
@@ -216,7 +224,7 @@ void SLAM::initialize() {
             // Check EssentialMat correctness
             int feasible_count = countNonZero(mask);
             cout << feasible_count << " -in- " << matches.size() << endl;
-            if(feasible_count < matches.size() * 0.5){
+            if(feasible_count < matches.size() * 0.3){
                 cout << "Infeasible  essential matrix. Drop this frame." << endl;
                 continue;
             }
@@ -231,8 +239,8 @@ void SLAM::initialize() {
             for(i = 0; i < res.size(); i++){
                 if(isGood[i] == 1) {
                     MapPoint *mp = new MapPoint(res[i]);
-                    mp->addKf(*allKeyFrames.back(), matches[i].queryIdx);
-                    mp->addKf(*k1, matches[i].trainIdx);
+                    mp->addKf(*allKeyFrames.back(), matches[i].queryIdx, coloredMap);
+                    mp->addKf(*k1, matches[i].trainIdx, coloredMap);
                     pointClouds.push_back(mp);
                     allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
                     k1->mps[matches[i].trainIdx] = mp;
@@ -260,23 +268,23 @@ void SLAM::undistortFrame(Mat &input, Mat &output) {
 void SLAM::track(KeyFrame & k, const vector <DMatch> & matches) {
     vector<int> inliers;
     allKeyFrames.back()->computeNewKfRT(k, matches, inliers);
-    int nextInlier = inliers[0], j = 0;
-
-    for(int i = 0; i < matches.size(); i++){
-        if(i == nextInlier){
-            j+=1;
-            if(j < inliers.size()) {
-                nextInlier = inliers[j];
-            }
-        } else{
-            MapPoint * mp = allKeyFrames.back()->mps[matches[i].queryIdx];
-            if(mp != nullptr){
-                mp->correctMapPoint(&k, matches[i].trainIdx);
-            }
-        }
-    }
-    inliers.clear();
-    allKeyFrames.back()->computeNewKfRT(k, matches, inliers);
+//    int nextInlier = inliers[0], j = 0;
+//
+//    for(int i = 0; i < matches.size(); i++){
+//        if(i == nextInlier){
+//            j+=1;
+//            if(j < inliers.size()) {
+//                nextInlier = inliers[j];
+//            }
+//        } else{
+//            MapPoint * mp = allKeyFrames.back()->mps[matches[i].queryIdx];
+//            if(mp != nullptr){
+//                mp->correctMapPoint(&k, matches[i].trainIdx);
+//            }
+//        }
+//    }
+//    inliers.clear();
+//    allKeyFrames.back()->computeNewKfRT(k, matches, inliers);
     cout << endl << "match size: " << matches.size() << ", inlier size: " << inliers.size() << endl;
 }
 
@@ -292,14 +300,14 @@ void SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
         if(mp == nullptr){
             if(isGood[i] == 1) {
                 mp = new MapPoint(res[i]);
-                mp->addKf(*allKeyFrames.back(), matches[i].queryIdx);
-                mp->addKf(k, matches[i].trainIdx);
+                mp->addKf(*allKeyFrames.back(), matches[i].queryIdx, coloredMap);
+                mp->addKf(k, matches[i].trainIdx, coloredMap);
                 pointClouds.push_back(mp);
                 allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
                 k.mps[matches[i].trainIdx] = mp;
             }
         } else{
-            mp->addKf(k, matches[i].trainIdx);
+            mp->addKf(k, matches[i].trainIdx, coloredMap);
             k.mps[matches[i].trainIdx] = mp;
         }
     }

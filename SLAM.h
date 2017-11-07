@@ -33,6 +33,8 @@ public:
     MediaStream * ms;
     MapPaint mPaint;
 
+    bool coloredMap;
+
     explicit SLAM(string settingFile = "../cfg/setting.xml");
 
     void setCameraIntrinsicParams(string calibFile);
