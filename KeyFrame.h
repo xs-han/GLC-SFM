@@ -27,12 +27,13 @@ public:
     int kfId;
 
     vector<KeyPoint> kps;
+    vector<MapPoint* > mps;
     Mat desc;
     vector<DMatch> mch;
+    vector<MapPoint *> visibileMps;
+    vector<KeyPoint> visibileKps;
 
     void setMch(const vector<DMatch> &mch);
-
-    vector<MapPoint* > mps;
 
     explicit KeyFrame(const Mat & newImg);
 
@@ -58,6 +59,14 @@ public:
     void drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const DMatch & m);
 
     void drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const vector<DMatch> & m);
+
+    Mat get3DLocation();
+
+    void generateRt(KeyFrame *newkf, Mat relaRvec, Mat relaTvec);
+
+    void generateVisibleMapPoints(vector<KeyFrame *> refKf);
+
+    void generateImg(vector<KeyFrame *> refKf);
 };
 
 

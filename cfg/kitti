@@ -1,0 +1,9 @@
+
+<kitti_setting>
+	"surf, 200, 6, 4, true
+	tracking, no point correction
+	computeRT, RANSAC, 1.0, 0.99
+	triangulateNewKeyFrame, check reprojection error at 1 pixel, check cosAngle at 0.99999
+	localBA, 10 iter per frame
+	globatBA, 10 iter per 100 frame"
+</kitti_setting>

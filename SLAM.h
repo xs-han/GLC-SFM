@@ -48,6 +48,7 @@ public:
     void track(KeyFrame & k, const vector <DMatch> & matches);
 
     void localmap(KeyFrame & k, const vector <DMatch> & matches);
+
 };
 
 

@@ -28,7 +28,7 @@ void ImageStream::setInput(const string &folder) {
         while ((entry = readdir(pdir))) {
             if (strcmp(entry->d_name, ".") != 0
                 && strcmp(entry->d_name, "..") != 0
-                && strstr(entry->d_name, ".jpg")) {
+                && (strstr(entry->d_name, ".png") || strstr(entry->d_name, ".jpg"))) {
                 allImages.push_back(inputPath + entry->d_name);
                 //cout << "found file:" << *(allImages.end()-1) << endl;
             }

@@ -152,8 +152,8 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     Mat c2 = -1 * newFrame.rmat.inv() * newFrame.tvec;
     for(i = 0; i < res.size(); i++){
         if(isGood[i]) {
-            if (norm(Mat(points1[i]), Mat(imagePoints1[i])) > 1 ||
-                norm(Mat(points2[i]), Mat(imagePoints2[i])) > 1) {
+            if (norm(Mat(points1[i]), Mat(imagePoints1[i])) > 3 ||
+                norm(Mat(points2[i]), Mat(imagePoints2[i])) > 3) {
                 isGood[i] = 0;
                 nGood--;
                 badmatches.push_back(matches[i]);
@@ -166,12 +166,12 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
             Mat p1 = c1 - p, p2 = c2 - p;
             double cosAngle = norm(p1.t() * p2) / (norm(p1) * norm(p2));
             assert(cosAngle <= 1.1);
-            assert(cosAngle >= -1);
-            if (cosAngle > 1 || cosAngle < 0) {
-                isGood[i] = 0;
-                nGood--;
-                badmatches.push_back(matches[i]);
-            }
+//            assert(cosAngle >= -1);
+//            if (cosAngle > 1) {
+//                isGood[i] = 0;
+//                nGood--;
+//                badmatches.push_back(matches[i]);
+//            }
         }
     }
 
@@ -202,6 +202,7 @@ void KeyFrame::computeNewKfRT(KeyFrame &newKf, const vector<DMatch> &mch, vector
     }
     cout << "useful match: " << obPoints.size() << endl;
     solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 100, 1.0, 0.99, inliers, CV_ITERATIVE);
+
     newKf.setRmat(rvec);
     newKf.setTvec(tvec);
 }
@@ -245,3 +246,82 @@ void KeyFrame::drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const 
     cvWaitKey(0);
     destroyWindow("multiple matches");
 }
+
+Mat KeyFrame::get3DLocation() {
+    return -rmat.inv() * tvec;
+}
+
+void KeyFrame::generateRt(KeyFrame *oldkf, Mat relaRvec, Mat relaTvec) {
+    Mat relaRmat;
+    Rodrigues(relaRvec, relaRmat);
+    setRmat(relaRmat*oldkf->rmat);
+    setTvec(relaRmat*(oldkf->tvec) + relaTvec);
+}
+
+void KeyFrame::generateVisibleMapPoints(vector<KeyFrame * > refKf){
+    for(KeyFrame * kf : refKf){
+        for(MapPoint * p : kf->mps){
+            Point3f p3d(p->x, p->y, p->z);
+            Mat local3DPoint = rmat * Mat(p3d) + tvec;
+            if(local3DPoint.at<float>(2) > 0){
+                Mat homo2DPoint = cameraMatrix * local3DPoint;
+                Point3f l3d(homo2DPoint);
+                if(l3d.x / l3d.z < kf->img.cols && l3d.x / l3d.z > 0
+                   && l3d.y / l3d.z < kf->img.rows && l3d.y / l3d.z > 0){
+                    if(find(visibileMps.begin(), visibileMps.end(), p) == visibileMps.end()){
+                        visibileMps.push_back(p);
+                        visibileKps.push_back(KeyPoint(l3d.x / l3d.z, l3d.y / l3d.z, 0));
+                    }
+                }
+            }
+        }
+    }
+}
+
+void KeyFrame::generateImg(vector<KeyFrame * > refKf){
+    Mat newImg(refKf.back()->img.cols, refKf.back()->img.rows, CV_8UC3);
+    int p1, p2;
+    double d1 = 10000000000, d2 = 10000000000;
+    for(int i = 0; i < newImg.rows; i++){
+        for(int j = 0; j < newImg.cols; j++){
+            for(int piter = 0; piter < visibileKps.size(); piter++){
+                double d = norm(visibileKps[piter].pt - Point2f(j,i));
+                if(d < d1){
+                    p1 = piter;
+                } else if(d > d1 && d < d2){
+                    p2 = piter;
+                }
+            }
+            Point2f p(j,i);
+            MapPoint * mp1 = visibileMps[p1];
+            MapPoint * mp2 = visibileMps[p2];
+            KeyPoint & kp1 = visibileKps[p1];
+            KeyPoint & kp2 = visibileKps[p2];
+
+            Mat localMp1mat = rmat * Mat(Point3f(mp1->x, mp1->y, mp1->z)) + tvec;
+            Mat localMp2mat = rmat * Mat(Point3f(mp2->x, mp2->y, mp2->z)) + tvec;
+            Point3f localMp1 (localMp1mat);
+            Point3f localMp2 (localMp2mat);
+
+            float opX = localMp1.x + (localMp2.x - localMp1.x) * (p.x - kp1.pt.x) / (kp2.pt.x - kp1.pt.x);
+            float opY = localMp1.y + (localMp2.y - localMp1.y) * (p.y - kp1.pt.y) / (kp2.pt.x - kp1.pt.y);
+            float opZ = (localMp1.z + localMp2.z) / 2;
+
+            Point3f localP(opX, opY, opZ);
+            Mat worldPmat =  rmat.inv() * (Mat(localP) - tvec);
+
+            newImg.at<Vec3b>(i,j) = Vec3b(255,255,255);
+            for(KeyFrame * kf : refKf){
+                Mat refP2d = kf->rmat * worldPmat + kf->tvec;
+                assert(refP2d.type() == CV_32F);
+                Point2f p2d(refP2d.at<float>(0) / refP2d.at<float>(2), refP2d.at<float>(1) / refP2d.at<float>(2));
+                if(p2d.x > 0 && p2d.x < kf->img.cols
+                   && p2d.y > 0 && p2d.y < kf->img.rows){
+                    newImg.at<Vec3b>(i,j) = kf->img.at<Vec3b>(p2d.y, p2d.x);
+                    break;
+                }
+            }
+        }
+    }
+}
+

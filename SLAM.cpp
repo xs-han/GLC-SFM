@@ -36,7 +36,8 @@ void SLAM::process() {
 
     bool wait = false;
     bool quit = false;
-    while (!pangolin::ShouldQuit() && !quit){
+    bool generate = false;
+    while (!pangolin::ShouldQuit()){
         Mat frame;
         if(!wait){
             if(*ms >> frame) {
@@ -51,7 +52,7 @@ void SLAM::process() {
                 Mat newDesc;
                 vector<DMatch> matches;
                 if (allKeyFrames.back()->isFrameKey(frame, newKps, newDesc, matches)) {
-                    cout << matches.size() << endl;
+                    cout << "Number of matches:" << matches.size() << endl;
 //                    Mat outimg;
 //                    drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, newKps, matches, outimg);
 //                    namedWindow("matches",0);
@@ -80,20 +81,27 @@ void SLAM::process() {
 
                     Optimizer::GlobalBundleAdjustment(localFrames, localPoints, KeyFrame::cameraMatrix, 10);
 
-                    if(allKeyFrames.back()->kfId % 5 == 0){
-                        Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 15);
+                    if(allKeyFrames.back()->kfId % 1000 == 0){
+                        Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
                     }
+                }
+                if(ms->isFinish()){
+                    Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
                 }
             } else{
                 char key = cvWaitKey(10);
                 if(key == 'q') quit = true;
                 if(key == 'w') wait = true;
             }
-
         }
         else{
             char key = cvWaitKey(10);
             if(key == 'w') wait = false;
+            if(key == 'g') generate = true;
+        }
+
+        if(generate){
+            generate = false;
         }
         // Clear screen and activate view to render into
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -107,6 +115,7 @@ void SLAM::process() {
         mPaint.drawMap(allKeyFrames, pointClouds);
         // Swap frames and Process Events
         pangolin::FinishFrame();
+
     }
 }
 
@@ -136,14 +145,15 @@ SLAM::SLAM(string settingFile) {
     }
 
     cout << "Use descriptor " << descType << endl;
-    if (descType=="orb")        detector=cv::ORB::create(500);
+    if (descType=="orb")        detector=cv::ORB::create(2500, 1.2, 8, 20);
     else if (descType=="brisk") detector=cv::BRISK::create();
     else if (descType=="akaze") detector=cv::AKAZE::create();
-    else if(descType=="surf" )  detector=cv::xfeatures2d::SURF::create(50, 6, 4, true);
+    else if(descType=="surf" )  detector=cv::xfeatures2d::SURF::create(30, 8, 6);
     else if(descType=="sift" )  detector=cv::xfeatures2d::SIFT::create(500);
     else throw std::runtime_error("Invalid descriptor");
     assert(!descType.empty());
     matcher.setDetecter(detector);
+    matcher.setRatio(0.8);
     KeyFrame::detector = detector;
     KeyFrame::matcher = matcher;
 

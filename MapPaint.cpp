@@ -68,8 +68,8 @@ void MapPaint::drawMap(const vector<KeyFrame *> &allKeyFrames, const vector<MapP
         glClearColor(1.0f,1.0f,1.0f,1.0f);
     for(const KeyFrame * k: allKeyFrames){
         drawCamera(*k);
-        cout << k->computeReprojectionError() << " ";
     }
+    cout << allKeyFrames.back()->kfId << ": " << allKeyFrames.back()->computeReprojectionError() << " ";
     cout << endl;
     for(const MapPoint * p: pointClouds){
         if(p->good && p->kfs.size() > 2)
