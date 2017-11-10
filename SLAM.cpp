@@ -39,7 +39,7 @@ void SLAM::process() {
     bool generate = false;
     while (!pangolin::ShouldQuit()){
         Mat frame;
-        if(!wait){
+        if(!wait && !quit){
             if(*ms >> frame) {
                 Mat undistFrame;
                 undistortFrame(frame, undistFrame);
@@ -47,6 +47,7 @@ void SLAM::process() {
                 imshow("frames", frame);
                 char key = cvWaitKey(10);
                 if(key == 'w') wait = true;
+                if(key == 'q') quit = true;
 
                 vector<KeyPoint> newKps;
                 Mat newDesc;
@@ -81,7 +82,7 @@ void SLAM::process() {
 
                     Optimizer::GlobalBundleAdjustment(localFrames, localPoints, KeyFrame::cameraMatrix, 10);
 
-                    if(allKeyFrames.back()->kfId % 1000 == 0){
+                    if(allKeyFrames.back()->kfId % 100 == 0){
                         Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
                     }
                 }
@@ -89,9 +90,10 @@ void SLAM::process() {
                     Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
                 }
             } else{
+                imshow("frames", allKeyFrames.back()->img);
                 char key = cvWaitKey(10);
-                if(key == 'q') quit = true;
                 if(key == 'w') wait = true;
+                if(key == 'q') quit = true;
             }
         }
         else{
@@ -102,6 +104,7 @@ void SLAM::process() {
 
         if(generate){
             generate = false;
+            generateVirtualFrames();
         }
         // Clear screen and activate view to render into
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -112,7 +115,12 @@ void SLAM::process() {
         //坐标轴的创建
         pangolin::glDrawAxis(3);
 
-        mPaint.drawMap(allKeyFrames, pointClouds);
+        vector<KeyFrame *> allDrawFrames;
+        allDrawFrames.insert(allDrawFrames.end(), allKeyFrames.begin(), allKeyFrames.end());
+        if(!allVirtualFrames.empty()){
+            allDrawFrames.insert(allDrawFrames.end(), allVirtualFrames.begin(), allVirtualFrames.end());
+        }
+        mPaint.drawMap(allDrawFrames, pointClouds);
         // Swap frames and Process Events
         pangolin::FinishFrame();
 
@@ -148,12 +156,12 @@ SLAM::SLAM(string settingFile) {
     if (descType=="orb")        detector=cv::ORB::create(2500, 1.2, 8, 20);
     else if (descType=="brisk") detector=cv::BRISK::create();
     else if (descType=="akaze") detector=cv::AKAZE::create();
-    else if(descType=="surf" )  detector=cv::xfeatures2d::SURF::create(30, 8, 6);
+    else if(descType=="surf" )  detector=cv::xfeatures2d::SURF::create(300, 8, 6);
     else if(descType=="sift" )  detector=cv::xfeatures2d::SIFT::create(500);
     else throw std::runtime_error("Invalid descriptor");
     assert(!descType.empty());
     matcher.setDetecter(detector);
-    matcher.setRatio(0.8);
+    matcher.setRatio(1);
     KeyFrame::detector = detector;
     KeyFrame::matcher = matcher;
 
@@ -322,4 +330,29 @@ void SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
         }
     }
     allKeyFrames.push_back(&k);
+}
+
+void SLAM::generateVirtualFrames() {
+    allVirtualFrames.clear();
+    for(int i = 0; i < allKeyFrames.size(); i++){
+        if(i < 16){
+            continue;
+        }
+        cout << "generating frame: " << i << endl;
+        KeyFrame * k = new KeyFrame(*allKeyFrames[i]);
+        Mat relaRvec(3,1,CV_64F), relaTvec(3,1,CV_64F);
+        relaRvec.at<double>(0) = 0;relaRvec.at<double>(1) = CV_PI / 4;relaRvec.at<double>(2) = 0;
+        relaTvec.at<double>(0) = 0;relaTvec.at<double>(1) = 0;relaTvec.at<double>(2) = 0;
+        k->generateRt(allKeyFrames[i], relaRvec, relaTvec);
+
+        vector<KeyFrame * > refKfs;
+        for(int j = 0; j < 16; j++){
+            refKfs.push_back(allKeyFrames[i-j]);
+        }
+
+        k->generateVisibleMapPoints(refKfs);
+        k->generateImg3(refKfs);
+        allVirtualFrames.push_back(k);
+        cout << "OK" << endl;
+    }
 }

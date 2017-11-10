@@ -152,8 +152,8 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     Mat c2 = -1 * newFrame.rmat.inv() * newFrame.tvec;
     for(i = 0; i < res.size(); i++){
         if(isGood[i]) {
-            if (norm(Mat(points1[i]), Mat(imagePoints1[i])) > 3 ||
-                norm(Mat(points2[i]), Mat(imagePoints2[i])) > 3) {
+            if (norm(Mat(points1[i]), Mat(imagePoints1[i])) > 5 ||
+                norm(Mat(points2[i]), Mat(imagePoints2[i])) > 5) {
                 isGood[i] = 0;
                 nGood--;
                 badmatches.push_back(matches[i]);
@@ -261,16 +261,21 @@ void KeyFrame::generateRt(KeyFrame *oldkf, Mat relaRvec, Mat relaTvec) {
 void KeyFrame::generateVisibleMapPoints(vector<KeyFrame * > refKf){
     for(KeyFrame * kf : refKf){
         for(MapPoint * p : kf->mps){
-            Point3f p3d(p->x, p->y, p->z);
-            Mat local3DPoint = rmat * Mat(p3d) + tvec;
-            if(local3DPoint.at<float>(2) > 0){
-                Mat homo2DPoint = cameraMatrix * local3DPoint;
-                Point3f l3d(homo2DPoint);
-                if(l3d.x / l3d.z < kf->img.cols && l3d.x / l3d.z > 0
-                   && l3d.y / l3d.z < kf->img.rows && l3d.y / l3d.z > 0){
-                    if(find(visibileMps.begin(), visibileMps.end(), p) == visibileMps.end()){
-                        visibileMps.push_back(p);
-                        visibileKps.push_back(KeyPoint(l3d.x / l3d.z, l3d.y / l3d.z, 0));
+            if(p != nullptr && p->good) {
+                Mat p3d(3,1,CV_64F);
+                p3d.at<double>(0) = p->x;p3d.at<double>(1) = p->y;p3d.at<double>(2) = p->z;
+                Mat local3DPoint = rmat * p3d + tvec;
+                if (local3DPoint.at<double>(2) > 0) {
+                    Mat homo2DPoint = cameraMatrix * local3DPoint;
+                    Point3f l3d(homo2DPoint.at<double>(0),
+                                homo2DPoint.at<double>(1),
+                                homo2DPoint.at<double>(2));
+                    if (l3d.x / l3d.z < kf->img.cols && l3d.x / l3d.z > 0
+                        && l3d.y / l3d.z < kf->img.rows && l3d.y / l3d.z > 0) {
+                        if (find(visibileMps.begin(), visibileMps.end(), p) == visibileMps.end()) {
+                            visibileMps.push_back(p);
+                            visibileKps.push_back(KeyPoint(l3d.x / l3d.z, l3d.y / l3d.z, 0));
+                        }
                     }
                 }
             }
@@ -278,50 +283,65 @@ void KeyFrame::generateVisibleMapPoints(vector<KeyFrame * > refKf){
     }
 }
 
-void KeyFrame::generateImg(vector<KeyFrame * > refKf){
-    Mat newImg(refKf.back()->img.cols, refKf.back()->img.rows, CV_8UC3);
-    int p1, p2;
-    double d1 = 10000000000, d2 = 10000000000;
+void KeyFrame::generateImg3(vector<KeyFrame * > refKf){
+    Mat newImg(refKf.back()->img.rows, refKf.back()->img.cols, CV_8UC3);
+    assert(visibileKps.size() == visibileMps.size());
+    Mat mask(refKf.back()->img.rows, refKf.back()->img.cols, CV_8U);
     for(int i = 0; i < newImg.rows; i++){
         for(int j = 0; j < newImg.cols; j++){
-            for(int piter = 0; piter < visibileKps.size(); piter++){
-                double d = norm(visibileKps[piter].pt - Point2f(j,i));
-                if(d < d1){
-                    p1 = piter;
-                } else if(d > d1 && d < d2){
-                    p2 = piter;
+            Vec3b p; p[0] = 0;p[1] = 0;p[2] = 0;
+            newImg.at<Vec3b>(i,j) = p;
+            mask.at<uchar>(i,j) = 0;
+        }
+    }
+
+    int l = 30;
+    for(int i = 0; i < visibileKps.size(); i++){
+        MapPoint * refMp = visibileMps[i];
+        Mat refMpmat(3,1,CV_64F);
+        refMpmat.at<double>(0) = refMp->x;refMpmat.at<double>(1) = refMp->y;refMpmat.at<double>(2) = refMp->z;
+        Mat localRefMp = rmat * refMpmat + tvec;
+        int u = (int)visibileKps[i].pt.x;
+        int v = (int)visibileKps[i].pt.y;
+        Mat homoP2d(3,1,CV_64F);
+        Mat rmatinv = rmat.inv();
+        Mat cminv = cameraMatrix.inv();
+        for(int r = max(0,v - l); r < min(v + l, newImg.rows); r++){
+            for(int c = max(0,u - l); c < min(u + l, newImg.cols); c++){
+                if(mask.at<uchar>(r,c) != 0){
+                    continue;
                 }
-            }
-            Point2f p(j,i);
-            MapPoint * mp1 = visibileMps[p1];
-            MapPoint * mp2 = visibileMps[p2];
-            KeyPoint & kp1 = visibileKps[p1];
-            KeyPoint & kp2 = visibileKps[p2];
-
-            Mat localMp1mat = rmat * Mat(Point3f(mp1->x, mp1->y, mp1->z)) + tvec;
-            Mat localMp2mat = rmat * Mat(Point3f(mp2->x, mp2->y, mp2->z)) + tvec;
-            Point3f localMp1 (localMp1mat);
-            Point3f localMp2 (localMp2mat);
-
-            float opX = localMp1.x + (localMp2.x - localMp1.x) * (p.x - kp1.pt.x) / (kp2.pt.x - kp1.pt.x);
-            float opY = localMp1.y + (localMp2.y - localMp1.y) * (p.y - kp1.pt.y) / (kp2.pt.x - kp1.pt.y);
-            float opZ = (localMp1.z + localMp2.z) / 2;
-
-            Point3f localP(opX, opY, opZ);
-            Mat worldPmat =  rmat.inv() * (Mat(localP) - tvec);
-
-            newImg.at<Vec3b>(i,j) = Vec3b(255,255,255);
-            for(KeyFrame * kf : refKf){
-                Mat refP2d = kf->rmat * worldPmat + kf->tvec;
-                assert(refP2d.type() == CV_32F);
-                Point2f p2d(refP2d.at<float>(0) / refP2d.at<float>(2), refP2d.at<float>(1) / refP2d.at<float>(2));
-                if(p2d.x > 0 && p2d.x < kf->img.cols
-                   && p2d.y > 0 && p2d.y < kf->img.rows){
-                    newImg.at<Vec3b>(i,j) = kf->img.at<Vec3b>(p2d.y, p2d.x);
-                    break;
+                homoP2d.at<double>(0) = c; homoP2d.at<double>(1) = r; homoP2d.at<double>(2) = 1;
+                Mat p3d = rmatinv * (cminv *(localRefMp.at<double>(2) * homoP2d) - tvec);
+                int numOp = 0;
+                Vec3i obv;obv[0] = 0;obv[1] = 0;obv[2] = 0;
+                for(KeyFrame * kf : refKf ){
+                    Mat homoKfP2d = cameraMatrix * (kf->rmat * p3d + kf->tvec);
+                    assert(homoKfP2d.type() == CV_64F);
+                    int kfR = homoKfP2d.at<double>(1) / homoKfP2d.at<double>(2);
+                    int kfC = homoKfP2d.at<double>(0) / homoKfP2d.at<double>(2);
+                    if(kfR >= 0 && kfR < kf->img.rows && kfC >= 0 && kfC < kf->img.cols){
+                        numOp += 1;
+                        obv += kf->img.at<Vec3b>(kfR, kfC);
+                        break;
+                    }
+                }
+                if(numOp > 0) {
+                    mask.at<uchar>(r, c) = 1;
+                    newImg.at<Vec3b>(r,c) = obv / numOp;
+                } else{
+                    mask.at<uchar>(r, c) = 0;
                 }
             }
         }
     }
+
+    img = newImg.clone();
+    Mat out;
+    drawKeypoints(newImg,visibileKps, out);
+    namedWindow("newGenImg", 0);
+    imshow("newGenImg", out);
+    cvWaitKey(0);
+    destroyWindow("newGenImg");
 }
 

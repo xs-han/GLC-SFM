@@ -30,6 +30,8 @@ public:
     vector<MapPoint *> pointClouds;
     vector<KeyFrame *> allKeyFrames;
 
+    vector<KeyFrame *> allVirtualFrames;
+
     MediaStream * ms;
     MapPaint mPaint;
 
@@ -48,6 +50,8 @@ public:
     void track(KeyFrame & k, const vector <DMatch> & matches);
 
     void localmap(KeyFrame & k, const vector <DMatch> & matches);
+
+    void generateVirtualFrames();
 
 };
 

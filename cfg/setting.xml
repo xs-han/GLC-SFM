@@ -4,7 +4,7 @@
 	<inputPath>"/home/xushen/Videos/kitti"</inputPath>
 	<calibrationFile>"../cfg/calib_kitti.xml"</calibrationFile>
 	<descriptorType>"surf"</descriptorType>
-	<imageScale>1</imageScale>
+	<imageScale>0.6</imageScale>
 	<rectified>1</rectified>
 	<coloredMap>0</coloredMap>
 </opencv_storage>

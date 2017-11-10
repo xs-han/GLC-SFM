@@ -14,7 +14,8 @@ public:
 
     MapPaint();
 
-    void drawMap(const vector<KeyFrame *> & allKeyFrames, const vector<MapPoint *> & pointClouds);
+    void drawMap(const vector<KeyFrame *> & allKeyFrames,
+                 const vector<MapPoint *> & pointClouds);
 
     void drawCamera(const KeyFrame & k);
 
