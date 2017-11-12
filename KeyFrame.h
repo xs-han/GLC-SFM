@@ -67,10 +67,6 @@ public:
     void generateVisibleMapPoints(vector<KeyFrame *> refKf);
 
     void generateImg(vector<KeyFrame *> refKf);
-
-    void generateImg2(vector<KeyFrame *> refKf);
-
-    void generateImg3(vector<KeyFrame *> refKf);
 };
 
 

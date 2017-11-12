@@ -283,7 +283,7 @@ void KeyFrame::generateVisibleMapPoints(vector<KeyFrame * > refKf){
     }
 }
 
-void KeyFrame::generateImg3(vector<KeyFrame * > refKf){
+void KeyFrame::generateImg(vector<KeyFrame *> refKf){
     Mat newImg(refKf.back()->img.rows, refKf.back()->img.cols, CV_8UC3);
     assert(visibileKps.size() == visibileMps.size());
     Mat mask(refKf.back()->img.rows, refKf.back()->img.cols, CV_8U);

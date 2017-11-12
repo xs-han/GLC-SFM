@@ -351,7 +351,7 @@ void SLAM::generateVirtualFrames() {
         }
 
         k->generateVisibleMapPoints(refKfs);
-        k->generateImg3(refKfs);
+        k->generateImg(refKfs);
         allVirtualFrames.push_back(k);
         cout << "OK" << endl;
     }

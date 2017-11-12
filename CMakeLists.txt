@@ -9,6 +9,8 @@ find_package(Pangolin REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Cholmod REQUIRED)
 
+add_subdirectory(DBow3)
+
 SET(G2O_LIBS
         ~/.local/lib/libg2o_core.so
         ~/.local/lib/libg2o_types_slam3d.so
@@ -30,4 +32,4 @@ set(SOURCE_FILES main.cpp
         ImageStream.h ImageStream.cpp
         FeatureMatcher.h FeatureMatcher.cpp MapPaint.cpp MapPaint.h Optimizer.cpp Optimizer.h MapPoint.cpp)
 add_executable(MV_SLAM ${SOURCE_FILES})
-target_link_libraries(MV_SLAM ${OpenCV_LIBS} ${Pangolin_LIBRARIES} ${Eigen_LIBRARIES} ${CHOLMOD_LIBRARIES} ${G2O_LIBS} )
+target_link_libraries(MV_SLAM ${OpenCV_LIBS} ${Pangolin_LIBRARIES} ${Eigen_LIBRARIES} ${CHOLMOD_LIBRARIES} ${G2O_LIBS})
