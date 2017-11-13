@@ -2,4 +2,4 @@ cmake-*
 bin
 lib
 .idea
-
+**/*.dbow3
