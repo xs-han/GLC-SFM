@@ -23,7 +23,8 @@ public:
     int imageScale;
     Mat cameraMatrix;
     Mat m1, m2, newCameraMatrix;
-    cv::Ptr<cv::Feature2D> detector;
+    cv::Ptr<cv::Feature2D> KpsDetector;
+    cv::Ptr<cv::Feature2D> DescDetector;
     FeatureMatcher matcher;
 
     Mat distortionCoefficient;

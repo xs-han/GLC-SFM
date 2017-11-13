@@ -9,14 +9,14 @@ using namespace std;
 using namespace cv;
 
 Mat KeyFrame::cameraMatrix;
-cv::Ptr<cv::Feature2D> KeyFrame::detector;
+cv::Ptr<cv::Feature2D> KeyFrame::DescDetector;
 FeatureMatcher KeyFrame::matcher;
 int KeyFrame::nKeyFrames = 0;
 
 bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & newDesc, vector<DMatch> & matches) {
     newKps.clear();
     matches.clear();
-    detector->detectAndCompute(newFrame, noArray(), newKps, newDesc );
+    DescDetector->detectAndCompute(newFrame, noArray(), newKps, newDesc, false);
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
     return matches.size() < kps.size() * 0.1;
@@ -40,7 +40,7 @@ void KeyFrame::setTvec(const Mat &t) {
 
 KeyFrame::KeyFrame(const Mat &newImg) {
     img = newImg.clone();
-    detector->detectAndCompute(img, noArray(), kps, desc);
+    DescDetector->detectAndCompute(img, noArray(), kps, desc, false);
     mps.clear();
     mps.resize(kps.size(), nullptr);
     rmat = Mat::eye(3,3,CV_64F);
@@ -51,7 +51,7 @@ KeyFrame::KeyFrame(const Mat &newImg) {
 
 KeyFrame::KeyFrame(const Mat& newImg, Mat &R, Mat &t) {
     img = newImg.clone();
-    detector->detectAndCompute(img, noArray(), kps, desc);
+    DescDetector->detectAndCompute(img, noArray(), kps, desc, false);
     mps.clear();
     mps.resize(kps.size(), nullptr);
     setRmat(R);
@@ -143,7 +143,6 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     cout << "good trianglation: " << nGood << endl;
     //drawFrameMatches(*this, newFrame, badmatches);
 
-
     Mat rvec1, rvec2; vector<Point2f> imagePoints1, imagePoints2;
     Rodrigues(rmat, rvec1); Rodrigues(newFrame.rmat, rvec2);
     projectPoints( res, rvec1, tvec, cameraMatrix, noArray(), imagePoints1);
@@ -152,8 +151,8 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     Mat c2 = -1 * newFrame.rmat.inv() * newFrame.tvec;
     for(i = 0; i < res.size(); i++){
         if(isGood[i]) {
-            if (norm(Mat(points1[i]), Mat(imagePoints1[i])) > 5 ||
-                norm(Mat(points2[i]), Mat(imagePoints2[i])) > 5) {
+            if (norm(Mat(points1[i]), Mat(imagePoints1[i])) > 1 ||
+                norm(Mat(points2[i]), Mat(imagePoints2[i])) > 1) {
                 isGood[i] = 0;
                 nGood--;
                 badmatches.push_back(matches[i]);
@@ -162,10 +161,10 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
                 isGood[i] = 1;
             }
 
-            Mat p(3, 1, CV_64F, {res[i].x, res[i].y, res[i].z});
-            Mat p1 = c1 - p, p2 = c2 - p;
-            double cosAngle = norm(p1.t() * p2) / (norm(p1) * norm(p2));
-            assert(cosAngle <= 1.1);
+//            Mat p(3, 1, CV_64F, {res[i].x, res[i].y, res[i].z});
+//            Mat p1 = c1 - p, p2 = c2 - p;
+//            double cosAngle = norm(p1.t() * p2) / (norm(p1) * norm(p2));
+//            assert(cosAngle <= 1.1);
 //            assert(cosAngle >= -1);
 //            if (cosAngle > 1) {
 //                isGood[i] = 0;

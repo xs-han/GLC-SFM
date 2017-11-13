@@ -17,7 +17,7 @@ class MapPoint;
 class KeyFrame {
 public:
     static Mat cameraMatrix;
-    static cv::Ptr<cv::Feature2D> detector;
+    static cv::Ptr<cv::Feature2D> DescDetector;
     static FeatureMatcher matcher;
     static int nKeyFrames;
     Mat img;

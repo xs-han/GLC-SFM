@@ -1,5 +1,6 @@
 
 <kitti_setting>
+	setRatio 0.6
 	"surf, 300, 8, 6
 	tracking, no point correction
 	computeRT, RANSAC, 1.0, 0.99

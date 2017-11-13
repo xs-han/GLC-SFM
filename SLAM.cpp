@@ -128,7 +128,7 @@ void SLAM::process() {
 }
 
 SLAM::SLAM(string settingFile) {
-    string inputType, inputPath, calibFile, descType;
+    string inputType, inputPath, calibFile, KpsType, descType;
     FileStorage fs(settingFile, FileStorage::READ);
     if (!fs.isOpened())
     {
@@ -138,6 +138,7 @@ SLAM::SLAM(string settingFile) {
     fs["inputType"] >> inputType;
     fs["inputPath"] >> inputPath;
     fs["calibrationFile"] >> calibFile;
+    fs["KeyPointType"] >> KpsType;
     fs["descriptorType"] >> descType;
     fs["imageScale"] >>imageScale;
     fs["rectified"] >> rectified;
@@ -153,16 +154,16 @@ SLAM::SLAM(string settingFile) {
     }
 
     cout << "Use descriptor " << descType << endl;
-    if (descType=="orb")        detector=cv::ORB::create(2500, 1.2, 8, 20);
-    else if (descType=="brisk") detector=cv::BRISK::create();
-    else if (descType=="akaze") detector=cv::AKAZE::create();
-    else if(descType=="surf" )  detector=cv::xfeatures2d::SURF::create(300, 8, 6);
-    else if(descType=="sift" )  detector=cv::xfeatures2d::SIFT::create(500);
+    if (descType=="orb")        DescDetector=cv::ORB::create(2000, 1.2, 8, 21, 0, 2, ORB::HARRIS_SCORE, 21, 10);
+    else if (descType=="brisk") DescDetector=cv::BRISK::create();
+    else if (descType=="akaze") DescDetector=cv::AKAZE::create();
+    else if(descType=="surf" )  DescDetector=cv::xfeatures2d::SURF::create(300, 8, 6, true);
+    else if(descType=="sift" )  DescDetector=cv::xfeatures2d::SIFT::create(500);
     else throw std::runtime_error("Invalid descriptor");
     assert(!descType.empty());
-    matcher.setDetecter(detector);
-    matcher.setRatio(1);
-    KeyFrame::detector = detector;
+    matcher.setDetecter(KpsDetector);
+    matcher.setRatio(0.6);
+    KeyFrame::DescDetector = DescDetector;
     KeyFrame::matcher = matcher;
 
     setCameraIntrinsicParams(calibFile);
@@ -279,7 +280,7 @@ void SLAM::undistortFrame(Mat &input, Mat &output) {
         remap(input, output, m1, m2, INTER_CUBIC);
     }
     if(imageScale != 1){
-        resize(output, output, input.size()/imageScale);
+        resize(output, output, input.size() / imageScale);
     }
 }
 
