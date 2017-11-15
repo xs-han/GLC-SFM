@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(MV_SLAM)
+project(GLC_SFM)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/g2o/cmake_modules ${PROJECT_SOURCE_DIR}/Pangolin/CMakeModules)
@@ -38,5 +38,6 @@ set(SOURCE_FILES main.cpp
         MapPaint.cpp MapPaint.h
         Optimizer.cpp Optimizer.h
         )
-add_executable(MV_SLAM ${SOURCE_FILES})
-target_link_libraries(MV_SLAM ${OpenCV_LIBS} pangolin ${CHOLMOD_LIBRARIES} ${G2O_LIBS} DBoW3)
+
+add_executable(GLC_SFM ${SOURCE_FILES})
+target_link_libraries(GLC_SFM ${OpenCV_LIBS} pangolin ${CHOLMOD_LIBRARIES} ${G2O_LIBS} DBoW3)
