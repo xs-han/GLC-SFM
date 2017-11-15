@@ -3,3 +3,5 @@ bin
 lib
 .idea
 **/*.dbow3
+**/bin
+**/lib
