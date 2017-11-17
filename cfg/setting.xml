@@ -1,11 +1,12 @@
 <?xml version="1.0"?>
 <opencv_storage>
-	<inputType>"image"</inputType>
-	<inputPath>"/home/xushen/Videos/kitti"</inputPath>
-	<calibrationFile>"../cfg/calib_kitti.xml"</calibrationFile>
+	<inputType>"video"</inputType>
+	<inputPath>"/home/xushen/Videos/GOPR0055.MP4"</inputPath>
+	<calibrationFile>"../cfg/calib_gopro_wide.xml"</calibrationFile>
 	<descriptorType>"surf"</descriptorType>
-	<imageScale>1</imageScale>
-	<rectified>1</rectified>
+	<imageScale>2</imageScale>
+	<rectified>0</rectified>
 	<coloredMap>0</coloredMap>
+	<vocPath>"../voc/surf128_300_6_4.dbow3"</vocPath>
 </opencv_storage>
 

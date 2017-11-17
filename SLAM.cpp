@@ -8,6 +8,7 @@
 #include <opencv2/core.hpp>
 #include <pangolin/pangolin.h>
 #include "Optimizer.h"
+#include "DBoW3.h"
 
 void SLAM::process() {
 
@@ -85,6 +86,8 @@ void SLAM::process() {
                     if(allKeyFrames.back()->kfId % 100 == 0){
                         Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
                     }
+
+                    loopclose(20);
                 }
                 if(ms->isFinish()){
                     Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
@@ -106,6 +109,7 @@ void SLAM::process() {
             generate = false;
             generateVirtualFrames();
         }
+
         // Clear screen and activate view to render into
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         d_cam.Activate(s_cam);
@@ -115,12 +119,7 @@ void SLAM::process() {
         //坐标轴的创建
         pangolin::glDrawAxis(3);
 
-        vector<KeyFrame *> allDrawFrames;
-        allDrawFrames.insert(allDrawFrames.end(), allKeyFrames.begin(), allKeyFrames.end());
-        if(!allVirtualFrames.empty()){
-            allDrawFrames.insert(allDrawFrames.end(), allVirtualFrames.begin(), allVirtualFrames.end());
-        }
-        mPaint.drawMap(allDrawFrames, pointClouds);
+        mPaint.drawMap(allKeyFrames, allVirtualFrames, pointClouds, loopPair);
         // Swap frames and Process Events
         pangolin::FinishFrame();
 
@@ -128,13 +127,14 @@ void SLAM::process() {
 }
 
 SLAM::SLAM(string settingFile) {
-    string inputType, inputPath, calibFile, KpsType, descType;
+    string inputType, inputPath, calibFile, KpsType, descType, vocPath;
     FileStorage fs(settingFile, FileStorage::READ);
     if (!fs.isOpened())
     {
         cout << "Could not open the setting file: \"" << settingFile << "\"" << endl;
         exit(-1);
     }
+
     fs["inputType"] >> inputType;
     fs["inputPath"] >> inputPath;
     fs["calibrationFile"] >> calibFile;
@@ -143,6 +143,7 @@ SLAM::SLAM(string settingFile) {
     fs["imageScale"] >>imageScale;
     fs["rectified"] >> rectified;
     fs["coloredMap"] >> coloredMap;
+    fs["vocPath"] >> vocPath;
 
     if(inputType == "image"){
         ms = new ImageStream(inputPath);
@@ -154,19 +155,24 @@ SLAM::SLAM(string settingFile) {
     }
 
     cout << "Use descriptor " << descType << endl;
-    if (descType=="orb")        DescDetector=cv::ORB::create(2000, 1.2, 8, 21, 0, 2, ORB::HARRIS_SCORE, 21, 10);
+    if (descType=="orb")        DescDetector=cv::ORB::create(2000, 1.2, 8, 31, 0, 2, ORB::HARRIS_SCORE, 31, 20);
     else if (descType=="brisk") DescDetector=cv::BRISK::create();
     else if (descType=="akaze") DescDetector=cv::AKAZE::create();
-    else if(descType=="surf" )  DescDetector=cv::xfeatures2d::SURF::create(300, 8, 6, true);
+    else if(descType=="surf" )  DescDetector=cv::xfeatures2d::SURF::create(300, 6, 4, true);
     else if(descType=="sift" )  DescDetector=cv::xfeatures2d::SIFT::create(500);
     else throw std::runtime_error("Invalid descriptor");
     assert(!descType.empty());
     matcher.setDetecter(KpsDetector);
-    matcher.setRatio(0.6);
+    matcher.setRatio(1);
     KeyFrame::DescDetector = DescDetector;
     KeyFrame::matcher = matcher;
 
     setCameraIntrinsicParams(calibFile);
+
+    cout << "Use DBoW file: " << vocPath << endl << "Loading ..." << endl;
+    voc.load(vocPath);
+    db.setVocabulary(voc);
+    cout << "Load finished." << endl;
 }
 
 void SLAM::setCameraIntrinsicParams(string calibFile) {
@@ -244,7 +250,7 @@ void SLAM::initialize() {
             int feasible_count = countNonZero(mask);
             cout << feasible_count << " -in- " << matches.size() << endl;
             if(feasible_count < matches.size() * 0.3){
-                cout << "Infeasible  essential matrix. Drop this frame." << endl;
+                cout << "Infeasible essential matrix. Drop this frame." << endl;
                 continue;
             }
 
@@ -340,20 +346,92 @@ void SLAM::generateVirtualFrames() {
             continue;
         }
         cout << "generating frame: " << i << endl;
-        KeyFrame * k = new KeyFrame(*allKeyFrames[i]);
-        Mat relaRvec(3,1,CV_64F), relaTvec(3,1,CV_64F);
-        relaRvec.at<double>(0) = 0;relaRvec.at<double>(1) = CV_PI / 4;relaRvec.at<double>(2) = 0;
-        relaTvec.at<double>(0) = 0;relaTvec.at<double>(1) = 0;relaTvec.at<double>(2) = 0;
-        k->generateRt(allKeyFrames[i], relaRvec, relaTvec);
-
         vector<KeyFrame * > refKfs;
         for(int j = 0; j < 16; j++){
             refKfs.push_back(allKeyFrames[i-j]);
         }
 
+
+        KeyFrame * k = new KeyFrame(*allKeyFrames[i]);
+        Mat relaRvec(3,1,CV_64F), relaTvec(3,1,CV_64F);
+        relaRvec.at<double>(0) = 0;relaRvec.at<double>(1) = CV_PI / 4;relaRvec.at<double>(2) = 0;
+        relaTvec.at<double>(0) = 0;relaTvec.at<double>(1) = 0;relaTvec.at<double>(2) = 0;
+        k->generateRt(allKeyFrames[i], relaRvec, relaTvec);
         k->generateVisibleMapPoints(refKfs);
         k->generateImg(refKfs);
-        allVirtualFrames.push_back(k);
-        cout << "OK" << endl;
+        vector<KeyFrame * > curVf;
+        curVf.push_back(k);
+        allVirtualFrames.push_back(curVf);
+    }
+}
+
+void SLAM::loopclose(int delay) {
+    KeyFrame & lastKf = *(allKeyFrames.back());
+    QueryResults ret;
+    db.query(lastKf.desc, ret, 20);
+    BowVector vkf1; voc.transform(lastKf.desc, vkf1);
+    BowVector vkf2; voc.transform((*(allKeyFrames.end()-2))->desc, vkf2);
+    double r = voc.score(vkf1, vkf2);
+    if(!ret.empty()){
+        int loopId = ret[0].Id, virtualId = 0; double score = ret[0].Score;
+        loopId = ret[0].Id / 5;
+        virtualId = ret[0].Id % 5;
+        score = ret[0].Score;
+
+        if(score / r > 1){
+            cout << ret[0] << endl;
+            KeyFrame * lkf1 = allKeyFrames.back();
+            KeyFrame * lkf2;
+            if(virtualId == 0){
+                lkf2 = allKeyFrames[loopId];
+            } else{
+                lkf2 = allVirtualFrames[loopId][virtualId-1];
+            }
+            vector<DMatch> mch;
+            matcher.match(lkf1->kps, lkf1->desc, lkf2->kps, lkf2->desc, mch);
+            allKeyFrames.back()->drawFrameMatches(*lkf1, *lkf2, mch);
+            loopPair.push_back(make_pair(loopId, allKeyFrames.back()->kfId));
+        }
+    }
+
+
+    vector<KeyFrame * > curVf;
+    for(double angle = -CV_PI / 3; angle <= CV_PI / 3; angle += CV_PI / 6) {
+        if(angle == 0){
+            continue;
+        }
+        if(allKeyFrames.size() < 16){
+            KeyFrame *k = new KeyFrame(lastKf);
+            curVf.push_back(k);
+        } else {
+            vector<KeyFrame * > refKfs;
+            for(int j = 0; j < 16; j++){
+                refKfs.push_back(*(allKeyFrames.end()-1-j));
+            }
+            KeyFrame *k = new KeyFrame(lastKf);
+            Mat relaRvec(3, 1, CV_64F), relaTvec(3, 1, CV_64F);
+            relaRvec.at<double>(0) = 0;
+            relaRvec.at<double>(1) = -angle;
+            relaRvec.at<double>(2) = 0;
+            relaTvec.at<double>(0) = 0;
+            relaTvec.at<double>(1) = 0;
+            relaTvec.at<double>(2) = 0;
+            k->generateRt(allKeyFrames.back(), relaRvec, relaTvec);
+            k->generateVisibleMapPoints(refKfs);
+            k->generateImg(refKfs);
+            curVf.push_back(k);
+        }
+    }
+    allVirtualFrames.push_back(curVf);
+
+    if(allKeyFrames.size() < delay + 1){
+        return;
+    } else {
+        int nKf = allKeyFrames.size() - 1 - delay;
+        KeyFrame * addKf = allKeyFrames[nKf];
+        db.add(addKf->desc);
+        for(KeyFrame * vkf : allVirtualFrames[nKf]){
+            db.add(vkf->desc);
+        }
     }
 }

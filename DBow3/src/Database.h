@@ -90,7 +90,7 @@ public:
    * @param T class inherited from Vocabulary
    * @param voc vocabulary to copy
    */
-  inline void setVocabulary(const Vocabulary &voc);
+  void setVocabulary(const Vocabulary &voc);
   
   /**
    * Sets the vocabulary to use and the direct index parameters, and clears

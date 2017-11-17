@@ -19,7 +19,7 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
     DescDetector->detectAndCompute(newFrame, noArray(), newKps, newDesc, false);
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
-    return matches.size() < kps.size() * 0.1;
+    return matches.size() < kps.size() * 0.25;
 }
 
 void KeyFrame::setRmat(const Mat & R) {
@@ -151,7 +151,7 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
     Mat c2 = -1 * newFrame.rmat.inv() * newFrame.tvec;
     for(i = 0; i < res.size(); i++){
         if(isGood[i]) {
-            if (norm(Mat(points1[i]), Mat(imagePoints1[i])) > 1 ||
+            if (norm(Mat(points1[i]), Mat(imagePoints1[i])) > 1||
                 norm(Mat(points2[i]), Mat(imagePoints2[i])) > 1) {
                 isGood[i] = 0;
                 nGood--;
@@ -242,8 +242,8 @@ void KeyFrame::drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const 
     drawMatches(f1.img, f1.kps, f2.img, f2.kps, m, out);
     namedWindow("multiple matches", 0);
     imshow("multiple matches", out);
-    cvWaitKey(0);
-    destroyWindow("multiple matches");
+    cvWaitKey(10);
+    //destroyWindow("multiple matches");
 }
 
 Mat KeyFrame::get3DLocation() {
@@ -260,7 +260,7 @@ void KeyFrame::generateRt(KeyFrame *oldkf, Mat relaRvec, Mat relaTvec) {
 void KeyFrame::generateVisibleMapPoints(vector<KeyFrame * > refKf){
     for(KeyFrame * kf : refKf){
         for(MapPoint * p : kf->mps){
-            if(p != nullptr && p->good) {
+            if(p != nullptr ) {
                 Mat p3d(3,1,CV_64F);
                 p3d.at<double>(0) = p->x;p3d.at<double>(1) = p->y;p3d.at<double>(2) = p->z;
                 Mat local3DPoint = rmat * p3d + tvec;
@@ -294,14 +294,16 @@ void KeyFrame::generateImg(vector<KeyFrame *> refKf){
         }
     }
 
-    int l = 30;
+    int l = 30; // patch size
     for(int i = 0; i < visibileKps.size(); i++){
         MapPoint * refMp = visibileMps[i];
         Mat refMpmat(3,1,CV_64F);
         refMpmat.at<double>(0) = refMp->x;refMpmat.at<double>(1) = refMp->y;refMpmat.at<double>(2) = refMp->z;
-        Mat localRefMp = rmat * refMpmat + tvec;
+        Mat localRefMp = cameraMatrix * (rmat * refMpmat + tvec);
         int u = (int)visibileKps[i].pt.x;
         int v = (int)visibileKps[i].pt.y;
+        if(mask.at<uchar>(u,v) == 1 && u > newImg.cols / 4 && u < newImg.cols / 4 * 3)
+            continue;
         Mat homoP2d(3,1,CV_64F);
         Mat rmatinv = rmat.inv();
         Mat cminv = cameraMatrix.inv();
@@ -314,7 +316,12 @@ void KeyFrame::generateImg(vector<KeyFrame *> refKf){
                 Mat p3d = rmatinv * (cminv *(localRefMp.at<double>(2) * homoP2d) - tvec);
                 int numOp = 0;
                 Vec3i obv;obv[0] = 0;obv[1] = 0;obv[2] = 0;
-                for(KeyFrame * kf : refKf ){
+                for(KeyFrame * kf : refKf )
+                //KeyFrame * kf = refMp->kfs.back();
+                //for(KeyFrame * kf : refMp->kfs )
+                //for(int i = 0; i < refMp->kfs.size(); i++)
+                {
+                    //KeyFrame * kf = refMp->kfs[refMp->kfs.size() - 1 - i];
                     Mat homoKfP2d = cameraMatrix * (kf->rmat * p3d + kf->tvec);
                     assert(homoKfP2d.type() == CV_64F);
                     int kfR = homoKfP2d.at<double>(1) / homoKfP2d.at<double>(2);
@@ -336,11 +343,18 @@ void KeyFrame::generateImg(vector<KeyFrame *> refKf){
     }
 
     img = newImg.clone();
+    kps.clear();
+    DescDetector->detectAndCompute(img,mask,kps,desc);
+    if(kps.empty()){
+        cout << "warning!~" << endl;
+        //cvWaitKey(0);
+    }
     Mat out;
-    drawKeypoints(newImg,visibileKps, out);
+    drawKeypoints(newImg,kps, out);
     namedWindow("newGenImg", 0);
     imshow("newGenImg", out);
-    cvWaitKey(0);
-    destroyWindow("newGenImg");
+    cvWaitKey(30);
+    //destroyWindow("newGenImg");
 }
+
 

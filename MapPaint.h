@@ -14,12 +14,16 @@ public:
 
     MapPaint();
 
-    void drawMap(const vector<KeyFrame *> & allKeyFrames,
-                 const vector<MapPoint *> & pointClouds);
-
     void drawCamera(const KeyFrame & k);
 
     void drawPoint(const MapPoint & p);
+
+    void drawCameraPair(KeyFrame &k1, KeyFrame &k2);
+
+    void drawMap(const vector<KeyFrame *> &allKeyFrames,
+                 const vector<vector<KeyFrame *>> &allVirtualFrames,
+                 const vector<MapPoint *> &pointClouds,
+                 const vector<pair<int, int>> loopPairs);
 };
 
 

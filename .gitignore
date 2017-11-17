@@ -5,3 +5,4 @@ lib
 **/*.dbow3
 **/bin
 **/lib
+bicocca/

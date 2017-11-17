@@ -13,9 +13,11 @@
 #include "VideoStream.h"
 #include "ImageStream.h"
 #include "MapPaint.h"
+#include "DBoW3.h"
 
 using namespace cv;
 using namespace std;
+using namespace DBoW3;
 
 class SLAM {
 public:
@@ -31,11 +33,13 @@ public:
     vector<MapPoint *> pointClouds;
     vector<KeyFrame *> allKeyFrames;
 
-    vector<KeyFrame *> allVirtualFrames;
+    vector<vector<KeyFrame *> > allVirtualFrames;
+    DBoW3::Vocabulary voc;
+    DBoW3::Database db;
+    vector<pair<int,int> > loopPair;
 
     MediaStream * ms;
     MapPaint mPaint;
-
     bool coloredMap;
 
     explicit SLAM(string settingFile = "../cfg/setting.xml");
@@ -51,6 +55,8 @@ public:
     void track(KeyFrame & k, const vector <DMatch> & matches);
 
     void localmap(KeyFrame & k, const vector <DMatch> & matches);
+
+    void loopclose(int delay);
 
     void generateVirtualFrames();
 

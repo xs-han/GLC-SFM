@@ -63,7 +63,22 @@ void MapPaint::drawCamera(const KeyFrame &k) {
     glPopMatrix();
 }
 
-void MapPaint::drawMap(const vector<KeyFrame *> &allKeyFrames, const vector<MapPoint *> &pointClouds) {
+void MapPaint::drawCameraPair(KeyFrame & k1, KeyFrame & k2) {
+    const Mat loc1 = k1.get3DLocation();
+    const Mat loc2 = k2.get3DLocation();
+    glLineWidth(4);
+    glColor3f(0,0,1.0);
+    glBegin(GL_LINES);
+    glVertex3f(loc1.at<double>(0),loc1.at<double>(1),loc1.at<double>(2));
+    glVertex3f(loc2.at<double>(0),loc2.at<double>(1),loc2.at<double>(2));
+    glEnd();
+}
+
+
+void MapPaint::drawMap(const vector<KeyFrame *> &allKeyFrames,
+                       const vector<vector<KeyFrame *> >&allVirtualFrames,
+                       const vector<MapPoint *> &pointClouds,
+                       const vector<pair<int,int>> loopPairs) {
     if(pointClouds.back()->colored)
         glClearColor(1.0f,1.0f,1.0f,1.0f);
     for(const KeyFrame * k: allKeyFrames){
@@ -71,11 +86,19 @@ void MapPaint::drawMap(const vector<KeyFrame *> &allKeyFrames, const vector<MapP
     }
     cout << allKeyFrames.back()->kfId << ": " << allKeyFrames.back()->computeReprojectionError() << " ";
     cout << endl;
+    for(const vector<KeyFrame * > kvec: allVirtualFrames){
+        for(const KeyFrame * k : kvec) {
+            drawCamera(*k);
+        }
+    }
     for(const MapPoint * p: pointClouds){
         if(p->good && p->kfs.size() > 2)
             drawPoint(*p);
     }
-    // Swap frames and Process Events
+    for(const pair<int, int> lp : loopPairs){
+        drawCameraPair(*allKeyFrames[lp.first], *allKeyFrames[lp.second]);
+    }
+
 }
 
 
