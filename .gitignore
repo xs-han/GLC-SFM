@@ -6,3 +6,4 @@ lib
 **/bin
 **/lib
 bicocca/
+!**/*.dbow3
