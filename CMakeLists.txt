@@ -52,3 +52,9 @@ target_link_libraries(create_voc_step0 ${OpenCV_LIBS} DBoW3)
 
 add_executable(create_voc_step1 util/create_voc_step1.cpp)
 target_link_libraries(create_voc_step1 ${OpenCV_LIBS} DBoW3)
+
+add_executable(compute_voc_adjecent_dis util/compute_voc_adjecent_dis.cpp)
+target_link_libraries(compute_voc_adjecent_dis ${OpenCV_LIBS} DBoW3)
+
+add_executable(compute_bow_with_angle util/compute_bow_with_angle.cpp VideoStream.cpp VideoStream.h)
+target_link_libraries(compute_bow_with_angle ${OpenCV_LIBS} DBoW3)

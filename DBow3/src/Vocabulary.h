@@ -447,6 +447,7 @@ protected:
   
   /// Words of the vocabulary (tree leaves)
   /// this condition holds: m_words[wid]->word_id == wid
+public:
   std::vector<Node*> m_words;
 public:
   //for debug (REMOVE)

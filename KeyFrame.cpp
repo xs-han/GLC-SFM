@@ -19,7 +19,7 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
     DescDetector->detectAndCompute(newFrame, noArray(), newKps, newDesc, false);
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
-    return matches.size() < kps.size() * 0.25;
+    return matches.size() < kps.size() * 0.3 || matches.size() < 200;
 }
 
 void KeyFrame::setRmat(const Mat & R) {
@@ -47,6 +47,8 @@ KeyFrame::KeyFrame(const Mat &newImg) {
     tvec = Mat::zeros(3,1,CV_64F);
     kfId = nKeyFrames;
     nKeyFrames++;
+    angle = 0;
+    good = true;
 }
 
 KeyFrame::KeyFrame(const Mat& newImg, Mat &R, Mat &t) {
@@ -58,6 +60,8 @@ KeyFrame::KeyFrame(const Mat& newImg, Mat &R, Mat &t) {
     setTvec(t);
     kfId = nKeyFrames;
     nKeyFrames++;
+    angle = 0;
+    good = true;
 }
 
 KeyFrame::KeyFrame(const Mat &newImg, const vector<KeyPoint> &newKps, const Mat &newDesc) {
@@ -70,9 +74,11 @@ KeyFrame::KeyFrame(const Mat &newImg, const vector<KeyPoint> &newKps, const Mat 
     tvec = Mat::zeros(3,1,CV_64F);
     kfId = nKeyFrames;
     nKeyFrames++;
+    angle = 0;
+    good = true;
 }
 
-void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
+bool KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
                                       const vector<DMatch> & matches,
                                       vector<Point3f> & res,
                                       vector <int> & isGood) {
@@ -182,6 +188,10 @@ void KeyFrame::triangulateNewKeyFrame(const KeyFrame &newFrame,
 //    }
 //    drawFrameMatches(*this, newFrame, goodmatches);
     cout << "successful trianglation: " << nGood << endl;
+    if(nGood < 30)
+        return false;
+    else
+        return true;
 }
 
 void KeyFrame::setMch(const vector<DMatch> &newMatches) {
@@ -200,8 +210,12 @@ void KeyFrame::computeNewKfRT(KeyFrame &newKf, const vector<DMatch> &mch, vector
         }
     }
     cout << "useful match: " << obPoints.size() << endl;
-    solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 100, 1.0, 0.99, inliers, CV_ITERATIVE);
-
+    if(obPoints.size() > 8) {
+        solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 100, 1.0, 0.99, inliers,
+                       SOLVEPNP_EPNP);
+    } else{
+        solvePnP(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, SOLVEPNP_EPNP);
+    }
     newKf.setRmat(rvec);
     newKf.setTvec(tvec);
 }
@@ -250,17 +264,17 @@ Mat KeyFrame::get3DLocation() {
     return -rmat.inv() * tvec;
 }
 
-void KeyFrame::generateRt(KeyFrame *oldkf, Mat relaRvec, Mat relaTvec) {
+void KeyFrame::generateRt(const KeyFrame *oldkf, Mat relaRvec, Mat relaTvec) {
     Mat relaRmat;
     Rodrigues(relaRvec, relaRmat);
     setRmat(relaRmat*oldkf->rmat);
     setTvec(relaRmat*(oldkf->tvec) + relaTvec);
 }
 
-void KeyFrame::generateVisibleMapPoints(vector<KeyFrame * > refKf){
+void KeyFrame::generateVisibleMapPoints(const vector<KeyFrame * > refKf){
     for(KeyFrame * kf : refKf){
         for(MapPoint * p : kf->mps){
-            if(p != nullptr ) {
+            if(p != nullptr && p->good) {
                 Mat p3d(3,1,CV_64F);
                 p3d.at<double>(0) = p->x;p3d.at<double>(1) = p->y;p3d.at<double>(2) = p->z;
                 Mat local3DPoint = rmat * p3d + tvec;
@@ -282,7 +296,7 @@ void KeyFrame::generateVisibleMapPoints(vector<KeyFrame * > refKf){
     }
 }
 
-void KeyFrame::generateImg(vector<KeyFrame *> refKf){
+void KeyFrame::generateImg(const vector<KeyFrame *> refKf){
     Mat newImg(refKf.back()->img.rows, refKf.back()->img.cols, CV_8UC3);
     assert(visibileKps.size() == visibileMps.size());
     Mat mask(refKf.back()->img.rows, refKf.back()->img.cols, CV_8U);
@@ -349,12 +363,19 @@ void KeyFrame::generateImg(vector<KeyFrame *> refKf){
         cout << "warning!~" << endl;
         //cvWaitKey(0);
     }
+    assert(kps.size() == desc.rows);
     Mat out;
     drawKeypoints(newImg,kps, out);
     namedWindow("newGenImg", 0);
     imshow("newGenImg", out);
     cvWaitKey(30);
     //destroyWindow("newGenImg");
+}
+
+KeyFrame::KeyFrame(const KeyFrame &k, double ang):img(k.img), desc(k.desc), angle(ang) {
+    kps.clear(); mps.clear();
+    visibileMps.clear(); visibileKps.clear();
+    good = true;
 }
 
 

@@ -54,11 +54,11 @@ public:
 
     void track(KeyFrame & k, const vector <DMatch> & matches);
 
-    void localmap(KeyFrame & k, const vector <DMatch> & matches);
+    bool localmap(KeyFrame & k, const vector <DMatch> & matches);
 
-    void loopclose(int delay);
+    bool loopclose(int delay, int refSize, int threhold);
 
-    void generateVirtualFrames();
+    //void generateVirtualFrames();
 
 };
 

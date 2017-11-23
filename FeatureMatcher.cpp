@@ -113,8 +113,12 @@ int FeatureMatcher::ratioTest(std::vector<std::vector<cv::DMatch> >
                 removed++;
             }
         } else { // does not have 2 neighbours
-            matchIterator->clear(); // remove match
-            removed++;
+            if(ratio == 1 && matchIterator->size() == 1) {
+
+            } else {
+                matchIterator->clear(); // remove match
+                removed++;
+            }
         }
     }
     return removed;

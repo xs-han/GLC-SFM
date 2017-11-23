@@ -55,15 +55,25 @@ void SLAM::process() {
                 vector<DMatch> matches;
                 if (allKeyFrames.back()->isFrameKey(frame, newKps, newDesc, matches)) {
                     cout << "Number of matches:" << matches.size() << endl;
-//                    Mat outimg;
-//                    drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, newKps, matches, outimg);
-//                    namedWindow("matches",0);
-//                    imshow("matches", outimg);
-//                    cvWaitKey(0);
-//                    destroyWindow("matches");
+                    if (matches.size() < 150){
+                        float r = matcher.ratio;
+                        matcher.setRatio(1);
+                        allKeyFrames.back()->isFrameKey(frame, newKps, newDesc, matches);
+                        matcher.setRatio(r);
+                    }
+                    Mat outimg;
+                    drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, newKps, matches, outimg);
+                    namedWindow("matches",0);
+                    imshow("matches", outimg);
+                    cvWaitKey(10);
+                    //destroyWindow("matches");
                     KeyFrame *k = new KeyFrame(frame, newKps, newDesc);
                     track(*k, matches);
-                    localmap(*k, matches);
+                    bool localok = localmap(*k, matches);
+                    if(!localok){
+                        cerr << "warning: local map failed." << endl;
+                        continue;
+                    }
 
                     vector<KeyFrame * > localFrames;
                     vector<MapPoint * > localPoints;
@@ -83,11 +93,9 @@ void SLAM::process() {
 
                     Optimizer::GlobalBundleAdjustment(localFrames, localPoints, KeyFrame::cameraMatrix, 10);
 
-                    if(allKeyFrames.back()->kfId % 100 == 0){
+                    if(loopclose(20, 12, matches.size() * 1.5) && 1){
                         Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
                     }
-
-                    loopclose(20);
                 }
                 if(ms->isFinish()){
                     Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
@@ -105,10 +113,10 @@ void SLAM::process() {
             if(key == 'g') generate = true;
         }
 
-        if(generate){
-            generate = false;
-            generateVirtualFrames();
-        }
+//        if(generate){
+//            generate = false;
+//            generateVirtualFrames();
+//        }
 
         // Clear screen and activate view to render into
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -155,7 +163,7 @@ SLAM::SLAM(string settingFile) {
     }
 
     cout << "Use descriptor " << descType << endl;
-    if (descType=="orb")        DescDetector=cv::ORB::create(2000, 1.2, 8, 31, 0, 2, ORB::HARRIS_SCORE, 31, 20);
+    if (descType=="orb")        DescDetector=cv::ORB::create(2000);
     else if (descType=="brisk") DescDetector=cv::BRISK::create();
     else if (descType=="akaze") DescDetector=cv::AKAZE::create();
     else if(descType=="surf" )  DescDetector=cv::xfeatures2d::SURF::create(300, 6, 4, true);
@@ -313,72 +321,80 @@ void SLAM::track(KeyFrame & k, const vector <DMatch> & matches) {
     cout << endl << "match size: " << matches.size() << ", inlier size: " << inliers.size() << endl;
 }
 
-void SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
+bool SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
     vector<Point3f> res;
     vector<int> isGood;
-    allKeyFrames.back()->triangulateNewKeyFrame(k, matches, res, isGood);
+    bool ok = allKeyFrames.back()->triangulateNewKeyFrame(k, matches, res, isGood);
     assert(matches.size() == res.size());
+    if(ok) {
+        for (int i = 0; i < res.size(); i++) {
 
-    for(int i = 0; i < res.size(); i++){
-
-        MapPoint * mp = allKeyFrames.back()->mps[matches[i].queryIdx];
-        if(mp == nullptr){
-            if(isGood[i] == 1) {
-                mp = new MapPoint(res[i]);
-                mp->addKf(*allKeyFrames.back(), matches[i].queryIdx, coloredMap);
+            MapPoint *mp = allKeyFrames.back()->mps[matches[i].queryIdx];
+            if (mp == nullptr) {
+                if (isGood[i] == 1) {
+                    mp = new MapPoint(res[i]);
+                    mp->addKf(*allKeyFrames.back(), matches[i].queryIdx, coloredMap);
+                    mp->addKf(k, matches[i].trainIdx, coloredMap);
+                    pointClouds.push_back(mp);
+                    allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
+                    k.mps[matches[i].trainIdx] = mp;
+                }
+            } else {
                 mp->addKf(k, matches[i].trainIdx, coloredMap);
-                pointClouds.push_back(mp);
-                allKeyFrames.back()->mps[matches[i].queryIdx] = mp;
                 k.mps[matches[i].trainIdx] = mp;
             }
-        } else{
-            mp->addKf(k, matches[i].trainIdx, coloredMap);
-            k.mps[matches[i].trainIdx] = mp;
         }
-    }
-    allKeyFrames.push_back(&k);
-}
-
-void SLAM::generateVirtualFrames() {
-    allVirtualFrames.clear();
-    for(int i = 0; i < allKeyFrames.size(); i++){
-        if(i < 16){
-            continue;
-        }
-        cout << "generating frame: " << i << endl;
-        vector<KeyFrame * > refKfs;
-        for(int j = 0; j < 16; j++){
-            refKfs.push_back(allKeyFrames[i-j]);
-        }
-
-
-        KeyFrame * k = new KeyFrame(*allKeyFrames[i]);
-        Mat relaRvec(3,1,CV_64F), relaTvec(3,1,CV_64F);
-        relaRvec.at<double>(0) = 0;relaRvec.at<double>(1) = CV_PI / 4;relaRvec.at<double>(2) = 0;
-        relaTvec.at<double>(0) = 0;relaTvec.at<double>(1) = 0;relaTvec.at<double>(2) = 0;
-        k->generateRt(allKeyFrames[i], relaRvec, relaTvec);
-        k->generateVisibleMapPoints(refKfs);
-        k->generateImg(refKfs);
-        vector<KeyFrame * > curVf;
-        curVf.push_back(k);
-        allVirtualFrames.push_back(curVf);
+        allKeyFrames.push_back(&k);
+        return true;
+    } else{
+        delete &k;
+        KeyFrame::nKeyFrames--;
+        return false;
     }
 }
 
-void SLAM::loopclose(int delay) {
+//void SLAM::generateVirtualFrames() {
+//    allVirtualFrames.clear();
+//    for(int i = 0; i < allKeyFrames.size(); i++){
+//        if(i < 16){
+//            continue;
+//        }
+//        cout << "generating frame: " << i << endl;
+//        vector<KeyFrame * > refKfs;
+//        for(int j = 0; j < 16; j++){
+//            refKfs.push_back(allKeyFrames[i-j]);
+//        }
+//
+//
+//        KeyFrame * k = new KeyFrame(*allKeyFrames[i]);
+//        Mat relaRvec(3,1,CV_64F), relaTvec(3,1,CV_64F);
+//        relaRvec.at<double>(0) = 0;relaRvec.at<double>(1) = CV_PI / 4;relaRvec.at<double>(2) = 0;
+//        relaTvec.at<double>(0) = 0;relaTvec.at<double>(1) = 0;relaTvec.at<double>(2) = 0;
+//        k->generateRt(allKeyFrames[i], relaRvec, relaTvec);
+//        k->generateVisibleMapPoints(refKfs);
+//        k->generateImg(refKfs);
+//        k->setVirtualFrame(true);
+//        vector<KeyFrame * > curVf;
+//        curVf.push_back(k);
+//        allVirtualFrames.push_back(curVf);
+//    }
+//}
+
+bool SLAM::loopclose(int delay, int refSize, int threhold) {
+    bool loopdetected = false;
     KeyFrame & lastKf = *(allKeyFrames.back());
     QueryResults ret;
     db.query(lastKf.desc, ret, 20);
     BowVector vkf1; voc.transform(lastKf.desc, vkf1);
     BowVector vkf2; voc.transform((*(allKeyFrames.end()-2))->desc, vkf2);
     double r = voc.score(vkf1, vkf2);
+    int loopId = -1, virtualId = 0; double score = -1;
     if(!ret.empty()){
-        int loopId = ret[0].Id, virtualId = 0; double score = ret[0].Score;
         loopId = ret[0].Id / 5;
         virtualId = ret[0].Id % 5;
         score = ret[0].Score;
 
-        if(score / r > 1){
+        if(score / r > 0.8){
             cout << ret[0] << endl;
             KeyFrame * lkf1 = allKeyFrames.back();
             KeyFrame * lkf2;
@@ -390,7 +406,33 @@ void SLAM::loopclose(int delay) {
             vector<DMatch> mch;
             matcher.match(lkf1->kps, lkf1->desc, lkf2->kps, lkf2->desc, mch);
             allKeyFrames.back()->drawFrameMatches(*lkf1, *lkf2, mch);
-            loopPair.push_back(make_pair(loopId, allKeyFrames.back()->kfId));
+            if(mch.size() > 20) {
+                loopPair.push_back(make_pair(loopId, allKeyFrames.back()->kfId));
+                loopdetected = true;
+            } else{
+                loopdetected = false;
+            }
+        } else{
+            loopdetected = false;
+        }
+    } else{
+        loopdetected = false;
+    }
+    if(loopdetected){
+        cout << "get a loop. Pose estimating..." << endl;
+        vector<KeyFrame *> loopRefKf;
+        for(int i = loopId; i > max(loopId - 4, 0); i-- ){
+            loopRefKf.push_back(allKeyFrames[i]);
+        }
+        for(KeyFrame * refkf : loopRefKf){
+            vector<DMatch> refmch;
+            matcher.match(refkf->kps, refkf->desc, lastKf.kps, lastKf.desc, refmch);
+            for(DMatch m:refmch){
+                MapPoint * p = refkf->mps[m.queryIdx];
+                if(p != nullptr && p->good && p->kfs.back() != &lastKf){
+                    p->addKf(lastKf, m.trainIdx, coloredMap);
+                }
+            }
         }
     }
 
@@ -400,15 +442,16 @@ void SLAM::loopclose(int delay) {
         if(angle == 0){
             continue;
         }
-        if(allKeyFrames.size() < 16){
-            KeyFrame *k = new KeyFrame(lastKf);
+        if(allKeyFrames.size() < refSize){
+            KeyFrame *k = new KeyFrame(lastKf, angle);
+            k->good = false;
             curVf.push_back(k);
         } else {
             vector<KeyFrame * > refKfs;
-            for(int j = 0; j < 16; j++){
+            for(int j = 0; j < refSize; j++){
                 refKfs.push_back(*(allKeyFrames.end()-1-j));
             }
-            KeyFrame *k = new KeyFrame(lastKf);
+            KeyFrame *k = new KeyFrame(lastKf, angle);
             Mat relaRvec(3, 1, CV_64F), relaTvec(3, 1, CV_64F);
             relaRvec.at<double>(0) = 0;
             relaRvec.at<double>(1) = -angle;
@@ -416,16 +459,24 @@ void SLAM::loopclose(int delay) {
             relaTvec.at<double>(0) = 0;
             relaTvec.at<double>(1) = 0;
             relaTvec.at<double>(2) = 0;
-            k->generateRt(allKeyFrames.back(), relaRvec, relaTvec);
+            k->generateRt(&lastKf, relaRvec, relaTvec);
             k->generateVisibleMapPoints(refKfs);
-            k->generateImg(refKfs);
-            curVf.push_back(k);
+            cout << "vps: " << k->visibileMps.size() << endl;
+            if(k->visibileMps.size() > threhold){
+                k->generateImg(refKfs);
+                curVf.push_back(k);
+                k->good = true;
+            } else {
+                curVf.push_back(k);
+                k->good = false;
+            }
         }
     }
+    assert(curVf.size() == 4);
     allVirtualFrames.push_back(curVf);
 
     if(allKeyFrames.size() < delay + 1){
-        return;
+        return loopdetected;
     } else {
         int nKf = allKeyFrames.size() - 1 - delay;
         KeyFrame * addKf = allKeyFrames[nKf];
@@ -434,4 +485,5 @@ void SLAM::loopclose(int delay) {
             db.add(vkf->desc);
         }
     }
+    return loopdetected;
 }

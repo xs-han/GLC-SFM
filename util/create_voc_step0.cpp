@@ -82,13 +82,15 @@ vector<string> readImagePaths(int argc,char **argv,int start){
 vector< cv::Mat  >  loadFeatures( std::vector<string> path_to_images,int delay,string descriptor="") throw (std::exception){
     //select detector
     cv::Ptr<cv::Feature2D> fdetector;
-    if (descriptor=="orb")        fdetector=cv::ORB::create();
+    if (descriptor=="orb")        fdetector=cv::ORB::create(2000);
     else if (descriptor=="brisk") fdetector=cv::BRISK::create();
 #ifdef OPENCV_VERSION_3
     else if (descriptor=="akaze") fdetector=cv::AKAZE::create();
 #endif
 #ifdef USE_CONTRIB
-    else if(descriptor=="surf" )  fdetector=cv::xfeatures2d::SURF::create(300, 6, 4, EXTENDED_SURF);
+    else if(descriptor=="surf" )  fdetector=cv::xfeatures2d::SURF::create(300, 6, 4, true);
+    else if(descriptor=="surf64" )  fdetector=cv::xfeatures2d::SURF::create(300, 6, 4);
+    else if(descriptor=="sift" )  fdetector=cv::xfeatures2d::SIFT::create(1500, 6);
 #endif
 
     else throw std::runtime_error("Invalid descriptor");
@@ -105,8 +107,8 @@ vector< cv::Mat  >  loadFeatures( std::vector<string> path_to_images,int delay,s
         cout<<"reading image: "<<path_to_images[i]<<endl;
         cv::Mat image = cv::imread(path_to_images[i], 0);
         if(image.empty())throw std::runtime_error("Could not open image"+path_to_images[i]);
-        Mat rectImage = image.clone();
-        //undistortFrame(image,rectImage, false);
+        Mat rectImage;
+        undistortFrame(image,rectImage, false);
         imshow("img", rectImage);
         cvWaitKey(10);
         cout<<"extracting features"<<endl;
@@ -149,7 +151,7 @@ int main(int argc,char **argv)
             cerr<<"Usage:  descriptor_name output image0 image1 ... \n\t descriptors:brisk,surf,orb(default),akaze(only if using opencv 3)"<<endl;
             return -1;
         }
-        setCameraIntrinsicParams("../cfg/Bicocca.xml");
+        setCameraIntrinsicParams("../cfg/calib_bicocca.xml");
 
         string descriptor=argv[1];
         string output=argv[2];

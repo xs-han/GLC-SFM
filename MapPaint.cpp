@@ -88,7 +88,9 @@ void MapPaint::drawMap(const vector<KeyFrame *> &allKeyFrames,
     cout << endl;
     for(const vector<KeyFrame * > kvec: allVirtualFrames){
         for(const KeyFrame * k : kvec) {
-            drawCamera(*k);
+            if(k->good) {
+                drawCamera(*k);
+            }
         }
     }
     for(const MapPoint * p: pointClouds){

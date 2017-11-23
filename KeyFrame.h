@@ -25,6 +25,7 @@ public:
     Mat tvec;
 
     int kfId;
+    double angle;
 
     vector<KeyPoint> kps;
     vector<MapPoint* > mps;
@@ -33,13 +34,15 @@ public:
     vector<MapPoint *> visibileMps;
     vector<KeyPoint> visibileKps;
 
+    bool good;
+
     void setMch(const vector<DMatch> &mch);
 
     explicit KeyFrame(const Mat & newImg);
 
     KeyFrame(const Mat& newImg, Mat & R, Mat & t);
 
-    KeyFrame(KeyFrame & k) = default;
+    KeyFrame(const KeyFrame & k, double ang);
 
     KeyFrame(const Mat & newImg, const vector<KeyPoint> & newKps, const Mat & newDesc);
 
@@ -53,7 +56,7 @@ public:
 
     double computeReprojectionError()const;
 
-    void triangulateNewKeyFrame(const KeyFrame &newFrame, const vector<DMatch> &matches, vector<Point3f> &res,
+    bool triangulateNewKeyFrame(const KeyFrame &newFrame, const vector<DMatch> &matches, vector<Point3f> &res,
                                 vector<int> & isGood);
 
     void drawFrameMatches(const KeyFrame & f1, const KeyFrame & f2, const DMatch & m);
@@ -62,11 +65,11 @@ public:
 
     Mat get3DLocation();
 
-    void generateRt(KeyFrame *newkf, Mat relaRvec, Mat relaTvec);
+    void generateRt(const KeyFrame *oldkf, Mat relaRvec, Mat relaTvec);
 
-    void generateVisibleMapPoints(vector<KeyFrame *> refKf);
+    void generateVisibleMapPoints(const vector<KeyFrame *> refKf);
 
-    void generateImg(vector<KeyFrame *> refKf);
+    void generateImg(const vector<KeyFrame *> refKf);
 };
 
 
