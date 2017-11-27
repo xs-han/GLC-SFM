@@ -71,6 +71,7 @@ int main(int argc, char ** argv){
     vector<KeyPoint> key_0; Mat desc_0;
     fdetector->detectAndCompute(im_0,noArray(), key_0, desc_0);
     Mat out; drawKeypoints(im_0,key_0,out);
+    imwrite("../jpg/ref.jpg", out);
     namedWindow("outkey"); imshow("outkey",out); cvWaitKey(0);
     db.add(desc_0);
 

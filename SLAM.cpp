@@ -38,10 +38,12 @@ void SLAM::process() {
     bool wait = false;
     bool quit = false;
     bool generate = false;
+    int fid = 0;
     while (!pangolin::ShouldQuit()){
         Mat frame;
         if(!wait && !quit){
-            if(*ms >> frame) {
+            if(*ms >> frame && KeyFrame::nKeyFrames < 503) {
+                //fid++;
                 Mat undistFrame;
                 undistortFrame(frame, undistFrame);
                 frame = undistFrame;
@@ -72,7 +74,7 @@ void SLAM::process() {
                     bool localok = localmap(*k, matches);
                     if(!localok){
                         cerr << "warning: local map failed." << endl;
-                        continue;
+                        //continue;
                     }
 
                     vector<KeyFrame * > localFrames;
@@ -93,15 +95,22 @@ void SLAM::process() {
 
                     Optimizer::GlobalBundleAdjustment(localFrames, localPoints, KeyFrame::cameraMatrix, 10);
 
-                    if(loopclose(20, 12, matches.size() * 1.5) && 1){
-                        Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
+                    if(loopclose(20, 16, matches.size() * 1.5) && 1){
+                        //Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 30);
                     }
+//                    if(loopcloseReal(20)){
+//                        //Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 30);
+//                    }
                 }
                 if(ms->isFinish()){
                     Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
                 }
             } else{
                 imshow("frames", allKeyFrames.back()->img);
+                cout << "end frame" << endl;
+                if(outRes.is_open()){
+                    outRes.close();
+                }
                 char key = cvWaitKey(10);
                 if(key == 'w') wait = true;
                 if(key == 'q') quit = true;
@@ -131,6 +140,9 @@ void SLAM::process() {
         // Swap frames and Process Events
         pangolin::FinishFrame();
 
+    }
+    if(outRes.is_open()){
+        outRes.close();
     }
 }
 
@@ -171,7 +183,7 @@ SLAM::SLAM(string settingFile) {
     else throw std::runtime_error("Invalid descriptor");
     assert(!descType.empty());
     matcher.setDetecter(KpsDetector);
-    matcher.setRatio(1);
+    matcher.setRatio(0.65);
     KeyFrame::DescDetector = DescDetector;
     KeyFrame::matcher = matcher;
 
@@ -181,6 +193,8 @@ SLAM::SLAM(string settingFile) {
     voc.load(vocPath);
     db.setVocabulary(voc);
     cout << "Load finished." << endl;
+
+    outRes.open("../cfg/" + descType + "_lab_virtual.txt");
 }
 
 void SLAM::setCameraIntrinsicParams(string calibFile) {
@@ -215,7 +229,7 @@ void SLAM::initialize() {
     Mat frame;
     Mat undistFrame;
     // Drop first unstable 30 frame;
-    for(int i = 0; i < 30; i++){
+    for(int i = 0; i < 20; i++){
         *ms >> frame;
     }
     *ms >> frame;
@@ -326,7 +340,7 @@ bool SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
     vector<int> isGood;
     bool ok = allKeyFrames.back()->triangulateNewKeyFrame(k, matches, res, isGood);
     assert(matches.size() == res.size());
-    if(ok) {
+    if(1) {
         for (int i = 0; i < res.size(); i++) {
 
             MapPoint *mp = allKeyFrames.back()->mps[matches[i].queryIdx];
@@ -346,11 +360,12 @@ bool SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
         }
         allKeyFrames.push_back(&k);
         return true;
-    } else{
-        delete &k;
-        KeyFrame::nKeyFrames--;
-        return false;
     }
+//    } else{
+//        delete &k;
+//        KeyFrame::nKeyFrames--;
+//        return false;
+//    }
 }
 
 //void SLAM::generateVirtualFrames() {
@@ -380,21 +395,97 @@ bool SLAM::localmap(KeyFrame &k, const vector<DMatch> &matches) {
 //    }
 //}
 
-bool SLAM::loopclose(int delay, int refSize, int threhold) {
+bool SLAM::loopcloseReal(int delay) {
     bool loopdetected = false;
     KeyFrame & lastKf = *(allKeyFrames.back());
+    Mat checkDesc = lastKf.desc.clone();
     QueryResults ret;
-    db.query(lastKf.desc, ret, 20);
-    BowVector vkf1; voc.transform(lastKf.desc, vkf1);
-    BowVector vkf2; voc.transform((*(allKeyFrames.end()-2))->desc, vkf2);
+    db.query(lastKf.desc.clone(), ret, 20);
+    BowVector vkf1; voc.transform(lastKf.desc.clone(), vkf1);
+    BowVector vkf2; voc.transform((*(allKeyFrames.end()-2))->desc.clone(), vkf2);
+    double r = voc.score(vkf1, vkf2);
+    int loopId = -1; double score = -1;
+    if(!ret.empty()){
+        loopId = ret[0].Id;
+        score = ret[0].Score;
+        outRes << lastKf.kfId << "\t" << loopId << "\t" << r << "\t" << score << "\t";
+        if(score / r >= 0){
+            cout << ret[0] << endl;
+            KeyFrame * lkf1 = allKeyFrames.back();
+            KeyFrame * lkf2 = allKeyFrames[loopId];
+
+            vector<DMatch> mch;
+            matcher.match(lkf1->kps, lkf1->desc, lkf2->kps, lkf2->desc, mch);
+            allKeyFrames.back()->drawFrameMatches(*lkf1, *lkf2, mch);
+            outRes << mch.size() << endl;
+            if(mch.size() > 20) {
+                loopPair.push_back(make_pair(loopId, allKeyFrames.back()->kfId));
+                loopdetected = true;
+            } else{
+                loopdetected = false;
+            }
+        } else{
+            loopdetected = false;
+        }
+    } else{
+        loopdetected = false;
+    }
+
+//    if(loopdetected){
+//        cout << "get a loop. Pose estimating..." << endl;
+//        vector<KeyFrame *> loopRefKf;
+//        for(int i = loopId + 4; i > max(loopId - 4, 0); i-- ){
+//            loopRefKf.push_back(allKeyFrames[i]);
+//        }
+//        for(KeyFrame * refkf : loopRefKf){
+//            vector<DMatch> refmch;
+//            matcher.match(refkf->kps, refkf->desc, lastKf.kps, lastKf.desc, refmch);
+//            for(DMatch m:refmch){
+//                MapPoint * refp = refkf->mps[m.queryIdx];
+//                MapPoint * p = lastKf.mps[m.trainIdx];
+//                for(auto ip = pointClouds.end()-1; ip >= pointClouds.begin(); ip--){
+//                    if(*ip == p){
+//                        pointClouds.erase(ip);
+//                        break;
+//                    }
+//                }
+//                if(refp != nullptr && p != nullptr && refp != p){
+//                    p->mergePoint(refp);
+//                    delete p;
+//                }
+//            }
+//        }
+//    }
+
+    if(allKeyFrames.size() < delay + 1){
+        return loopdetected;
+    } else {
+        int nKf = allKeyFrames.size() - 1 - delay;
+        KeyFrame * addKf = allKeyFrames[nKf];
+        db.add(addKf->desc.clone());
+    }
+    assert(countNonZero(checkDesc != lastKf.desc) == 0);
+    return loopdetected;
+}
+
+bool SLAM::loopclose(int delay, int refSize, int threhold) {
+    assert(db.size() % 5 == 0);
+    bool loopdetected = false;
+    KeyFrame & lastKf = *(allKeyFrames.back());
+    Mat checkDesc = lastKf.desc.clone();
+    QueryResults ret;
+    db.query(lastKf.desc.clone(), ret, 20);
+    BowVector vkf1; voc.transform(lastKf.desc.clone(), vkf1);
+    BowVector vkf2; voc.transform((*(allKeyFrames.end()-2))->desc.clone(), vkf2);
     double r = voc.score(vkf1, vkf2);
     int loopId = -1, virtualId = 0; double score = -1;
     if(!ret.empty()){
         loopId = ret[0].Id / 5;
         virtualId = ret[0].Id % 5;
         score = ret[0].Score;
+        outRes << lastKf.kfId << "\t" << loopId << "\t" << r << "\t" << score << "\t";
 
-        if(score / r > 0.8){
+        if(score / r > 0){
             cout << ret[0] << endl;
             KeyFrame * lkf1 = allKeyFrames.back();
             KeyFrame * lkf2;
@@ -402,9 +493,13 @@ bool SLAM::loopclose(int delay, int refSize, int threhold) {
                 lkf2 = allKeyFrames[loopId];
             } else{
                 lkf2 = allVirtualFrames[loopId][virtualId-1];
+                if(!lkf2->good){
+                    lkf2 = allKeyFrames[loopId];
+                }
             }
             vector<DMatch> mch;
             matcher.match(lkf1->kps, lkf1->desc, lkf2->kps, lkf2->desc, mch);
+            outRes << mch.size() << endl;
             allKeyFrames.back()->drawFrameMatches(*lkf1, *lkf2, mch);
             if(mch.size() > 20) {
                 loopPair.push_back(make_pair(loopId, allKeyFrames.back()->kfId));
@@ -420,20 +515,20 @@ bool SLAM::loopclose(int delay, int refSize, int threhold) {
     }
     if(loopdetected){
         cout << "get a loop. Pose estimating..." << endl;
-        vector<KeyFrame *> loopRefKf;
-        for(int i = loopId; i > max(loopId - 4, 0); i-- ){
-            loopRefKf.push_back(allKeyFrames[i]);
-        }
-        for(KeyFrame * refkf : loopRefKf){
-            vector<DMatch> refmch;
-            matcher.match(refkf->kps, refkf->desc, lastKf.kps, lastKf.desc, refmch);
-            for(DMatch m:refmch){
-                MapPoint * p = refkf->mps[m.queryIdx];
-                if(p != nullptr && p->good && p->kfs.back() != &lastKf){
-                    p->addKf(lastKf, m.trainIdx, coloredMap);
-                }
-            }
-        }
+//        vector<KeyFrame *> loopRefKf;
+//        for(int i = loopId; i > max(loopId - 4, 0); i-- ){
+//            loopRefKf.push_back(allKeyFrames[i]);
+//        }
+//        for(KeyFrame * refkf : loopRefKf){
+//            vector<DMatch> refmch;
+//            matcher.match(refkf->kps, refkf->desc, lastKf.kps, lastKf.desc, refmch);
+//            for(DMatch m:refmch){
+//                MapPoint * p = refkf->mps[m.queryIdx];
+//                if(p != nullptr && p->good && p->kfs.back() != &lastKf){
+//                    p->addKf(lastKf, m.trainIdx, coloredMap);
+//                }
+//            }
+//        }
     }
 
 
@@ -474,16 +569,29 @@ bool SLAM::loopclose(int delay, int refSize, int threhold) {
     }
     assert(curVf.size() == 4);
     allVirtualFrames.push_back(curVf);
-
+    if(countNonZero(checkDesc != lastKf.desc) != 0){
+        cout << "warning! desc is modified" << endl;
+        lastKf.desc = checkDesc.clone();
+        assert(countNonZero(checkDesc != lastKf.desc) == 0);
+    }
     if(allKeyFrames.size() < delay + 1){
         return loopdetected;
     } else {
         int nKf = allKeyFrames.size() - 1 - delay;
         KeyFrame * addKf = allKeyFrames[nKf];
-        db.add(addKf->desc);
+        db.add(addKf->desc.clone());
         for(KeyFrame * vkf : allVirtualFrames[nKf]){
-            db.add(vkf->desc);
+            if(vkf->good) {
+                db.add(vkf->desc.clone());
+            }else{
+                db.add(addKf->desc.clone());
+            }
         }
+    }
+    if(countNonZero(checkDesc != lastKf.desc) != 0){
+        cout << "warning! desc is modified again" << endl;
+        lastKf.desc = checkDesc.clone();
+        assert(countNonZero(checkDesc != lastKf.desc) == 0);
     }
     return loopdetected;
 }

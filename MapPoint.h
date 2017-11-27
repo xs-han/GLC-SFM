@@ -43,6 +43,10 @@ public:
     void setColor(int r, int g, int b);
 
     void addColor(int r, int g, int b);
+
+    void mergePoint(MapPoint p);
+
+    void mergePoint(MapPoint *p);
 };
 
 

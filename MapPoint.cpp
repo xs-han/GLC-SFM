@@ -94,3 +94,17 @@ void MapPoint::addKf(KeyFrame &f, int p, bool coloredMap) {
     }
 }
 
+void MapPoint::mergePoint(MapPoint * p) {
+    for(int i = 0; i < kfs.size(); i++){
+        KeyFrame * kf = kfs[i];
+        int kp = kps[i];
+        kf->mps[kp] = p;
+    }
+    for(KeyFrame * kf: kfs){
+        p->kfs.push_back(kf);
+    }
+    for(int kp : kps){
+        p->kps.push_back(kp);
+    }
+}
+

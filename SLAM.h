@@ -41,6 +41,7 @@ public:
     MediaStream * ms;
     MapPaint mPaint;
     bool coloredMap;
+    ofstream outRes;
 
     explicit SLAM(string settingFile = "../cfg/setting.xml");
 
@@ -60,6 +61,7 @@ public:
 
     //void generateVirtualFrames();
 
+    bool loopcloseReal(int delay);
 };
 
 

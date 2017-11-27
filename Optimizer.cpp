@@ -10,7 +10,7 @@ using namespace std;
 using namespace cv;
 
 void Optimizer::GlobalBundleAdjustment(vector <KeyFrame *> & kfs, vector <MapPoint *> & pc, Mat & cameraMatrix, int iter) {
-    bool ROBUST_KERNEL = true;
+    bool ROBUST_KERNEL = false;
     bool STRUCTURE_ONLY = false;
     bool DENSE = false;
 

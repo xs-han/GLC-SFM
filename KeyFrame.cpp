@@ -19,7 +19,7 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
     DescDetector->detectAndCompute(newFrame, noArray(), newKps, newDesc, false);
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
-    return matches.size() < kps.size() * 0.3 || matches.size() < 200;
+    return matches.size() < kps.size() * 0.15;
 }
 
 void KeyFrame::setRmat(const Mat & R) {
@@ -210,7 +210,7 @@ void KeyFrame::computeNewKfRT(KeyFrame &newKf, const vector<DMatch> &mch, vector
         }
     }
     cout << "useful match: " << obPoints.size() << endl;
-    if(obPoints.size() > 8) {
+    if(obPoints.size() > 4) {
         solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 100, 1.0, 0.99, inliers,
                        SOLVEPNP_EPNP);
     } else{
@@ -361,19 +361,19 @@ void KeyFrame::generateImg(const vector<KeyFrame *> refKf){
     DescDetector->detectAndCompute(img,mask,kps,desc);
     if(kps.empty()){
         cout << "warning!~" << endl;
-        //cvWaitKey(0);
+        cvWaitKey(0);
     }
     assert(kps.size() == desc.rows);
     Mat out;
     drawKeypoints(newImg,kps, out);
     namedWindow("newGenImg", 0);
     imshow("newGenImg", out);
-    cvWaitKey(30);
+    cvWaitKey(10);
     //destroyWindow("newGenImg");
 }
 
-KeyFrame::KeyFrame(const KeyFrame &k, double ang):img(k.img), desc(k.desc), angle(ang) {
-    kps.clear(); mps.clear();
+KeyFrame::KeyFrame(const KeyFrame &k, double ang):img(Mat()), desc(k.desc), angle(ang) {
+    kps = k.kps; mps.clear();
     visibileMps.clear(); visibileKps.clear();
     good = true;
 }
