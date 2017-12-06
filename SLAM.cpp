@@ -38,12 +38,10 @@ void SLAM::process() {
     bool wait = false;
     bool quit = false;
     bool generate = false;
-    int fid = 0;
     while (!pangolin::ShouldQuit()){
         Mat frame;
         if(!wait && !quit){
-            if(*ms >> frame && KeyFrame::nKeyFrames < 503) {
-                //fid++;
+            if(*ms >> frame) {
                 Mat undistFrame;
                 undistortFrame(frame, undistFrame);
                 frame = undistFrame;
@@ -59,7 +57,7 @@ void SLAM::process() {
                     cout << "Number of matches:" << matches.size() << endl;
                     if (matches.size() < 150){
                         float r = matcher.ratio;
-                        matcher.setRatio(1);
+                        matcher.setRatio(0.65);
                         allKeyFrames.back()->isFrameKey(frame, newKps, newDesc, matches);
                         matcher.setRatio(r);
                     }
@@ -70,6 +68,7 @@ void SLAM::process() {
                     cvWaitKey(10);
                     //destroyWindow("matches");
                     KeyFrame *k = new KeyFrame(frame, newKps, newDesc);
+                    k->time = ms->id * 1.0 / 30.0;
                     track(*k, matches);
                     bool localok = localmap(*k, matches);
                     if(!localok){
@@ -95,12 +94,15 @@ void SLAM::process() {
 
                     Optimizer::GlobalBundleAdjustment(localFrames, localPoints, KeyFrame::cameraMatrix, 10);
 
-                    if(loopclose(20, 16, matches.size() * 1.5) && 1){
-                        //Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 30);
+                    if(loopClosingType == "Geometric") {
+                        if (loopclose(20, 16, matches.size() * 1.5) && 1) {
+                            //Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 30);
+                        }
+                    } else {
+                        if(loopcloseReal(20)){
+                            //Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 30);
+                        }
                     }
-//                    if(loopcloseReal(20)){
-//                        //Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 30);
-//                    }
                 }
                 if(ms->isFinish()){
                     Optimizer::GlobalBundleAdjustment(allKeyFrames, pointClouds, KeyFrame::cameraMatrix, 10);
@@ -164,6 +166,7 @@ SLAM::SLAM(string settingFile) {
     fs["rectified"] >> rectified;
     fs["coloredMap"] >> coloredMap;
     fs["vocPath"] >> vocPath;
+    fs["loopClosingType"] >> loopClosingType;
 
     if(inputType == "image"){
         ms = new ImageStream(inputPath);
@@ -175,11 +178,12 @@ SLAM::SLAM(string settingFile) {
     }
 
     cout << "Use descriptor " << descType << endl;
-    if (descType=="orb")        DescDetector=cv::ORB::create(2000);
+    if (descType=="orb")        DescDetector=cv::ORB::create(1000,1.2,6);
     else if (descType=="brisk") DescDetector=cv::BRISK::create();
     else if (descType=="akaze") DescDetector=cv::AKAZE::create();
     else if(descType=="surf" )  DescDetector=cv::xfeatures2d::SURF::create(300, 6, 4, true);
-    else if(descType=="sift" )  DescDetector=cv::xfeatures2d::SIFT::create(500);
+    else if(descType=="surf64" )  DescDetector=cv::xfeatures2d::SURF::create(300, 6, 4);
+    else if(descType=="sift" )  DescDetector=cv::xfeatures2d::SIFT::create(1500,6);
     else throw std::runtime_error("Invalid descriptor");
     assert(!descType.empty());
     matcher.setDetecter(KpsDetector);
@@ -194,7 +198,7 @@ SLAM::SLAM(string settingFile) {
     db.setVocabulary(voc);
     cout << "Load finished." << endl;
 
-    outRes.open("../cfg/" + descType + "_lab_virtual.txt");
+    outRes.open("../cfg/" + descType + "_lab_" + loopClosingType + ".txt");
 }
 
 void SLAM::setCameraIntrinsicParams(string calibFile) {
@@ -236,6 +240,7 @@ void SLAM::initialize() {
     undistortFrame(frame, undistFrame);
     frame = undistFrame.clone();
     KeyFrame * k = new KeyFrame(frame);
+    k->time = ms->id * 1.0 / 30.0;
     allKeyFrames.push_back(k);
 
     while (true){
@@ -252,7 +257,7 @@ void SLAM::initialize() {
         vector<KeyPoint> & kps1 = allKeyFrames.back()->kps, kps2;
         Mat & desc1 = allKeyFrames.back()->desc, desc2;
         Mat R, t, mask;
-        if(allKeyFrames.back()->isFrameKey(frame, kps2, desc2, matches)){
+        if(allKeyFrames.back()->isFrameKeyInit(frame, kps2, desc2, matches)){
 //            Mat outimg;
 //            drawMatches(allKeyFrames.back()->img, allKeyFrames.back()->kps, frame, kps2, matches, outimg);
 //            namedWindow("matches",0);
@@ -280,6 +285,7 @@ void SLAM::initialize() {
             recoverPose(E, points1, points2, R, t, cameraMatrix.at<double>(0,0), Point2d(cameraMatrix.at<double>(0,2), cameraMatrix.at<double>(1,2)), mask);
             cout << t << endl;
             KeyFrame * k1 = new KeyFrame(frame, R, t);
+            k1->time = ms->id * 1.0 / 30.0;
             allKeyFrames.back()->triangulateNewKeyFrame(*k1, matches, res, isGood);
             assert((int)matches.size() == res.size());
 
@@ -417,6 +423,7 @@ bool SLAM::loopcloseReal(int delay) {
             vector<DMatch> mch;
             matcher.match(lkf1->kps, lkf1->desc, lkf2->kps, lkf2->desc, mch);
             allKeyFrames.back()->drawFrameMatches(*lkf1, *lkf2, mch);
+            outRes << lkf1->time << "\t" << lkf2->time << "\t";
             outRes << mch.size() << endl;
             if(mch.size() > 20) {
                 loopPair.push_back(make_pair(loopId, allKeyFrames.back()->kfId));
@@ -499,6 +506,7 @@ bool SLAM::loopclose(int delay, int refSize, int threhold) {
             }
             vector<DMatch> mch;
             matcher.match(lkf1->kps, lkf1->desc, lkf2->kps, lkf2->desc, mch);
+            outRes << lkf1->time << "\t" << lkf2->time << "\t";
             outRes << mch.size() << endl;
             allKeyFrames.back()->drawFrameMatches(*lkf1, *lkf2, mch);
             if(mch.size() > 20) {
@@ -539,6 +547,7 @@ bool SLAM::loopclose(int delay, int refSize, int threhold) {
         }
         if(allKeyFrames.size() < refSize){
             KeyFrame *k = new KeyFrame(lastKf, angle);
+            k->time = lastKf.time;
             k->good = false;
             curVf.push_back(k);
         } else {
@@ -547,6 +556,7 @@ bool SLAM::loopclose(int delay, int refSize, int threhold) {
                 refKfs.push_back(*(allKeyFrames.end()-1-j));
             }
             KeyFrame *k = new KeyFrame(lastKf, angle);
+            k->time = lastKf.time;
             Mat relaRvec(3, 1, CV_64F), relaTvec(3, 1, CV_64F);
             relaRvec.at<double>(0) = 0;
             relaRvec.at<double>(1) = -angle;

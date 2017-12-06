@@ -25,6 +25,7 @@ public:
     Mat tvec;
 
     int kfId;
+    double time;
     double angle;
 
     vector<KeyPoint> kps;
@@ -70,6 +71,8 @@ public:
     void generateVisibleMapPoints(const vector<KeyFrame *> refKf);
 
     void generateImg(const vector<KeyFrame *> refKf);
+
+    bool isFrameKeyInit(const Mat &newFrame, vector<KeyPoint> &newKps, Mat &newDesc, vector<DMatch> &matches);
 };
 
 

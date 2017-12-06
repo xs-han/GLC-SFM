@@ -14,6 +14,7 @@ class MediaStream{
 public:
     string inputPath;
     bool finish;
+    int id;
 
     virtual bool isFinish() const {
         return finish;
@@ -21,7 +22,7 @@ public:
 
     MediaStream():inputPath("unknown"), finish(true){};
 
-    explicit MediaStream(const string & name): inputPath(name), finish(false){};
+    explicit MediaStream(const string & name): inputPath(name), finish(false), id(0){};
 
     virtual void setInput(const string & name) = 0;
 

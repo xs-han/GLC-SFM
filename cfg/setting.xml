@@ -8,5 +8,6 @@
 	<rectified>0</rectified>
 	<coloredMap>0</coloredMap>
 	<vocPath>"../voc/surf128_300_6_4.dbow3"</vocPath>
+	<loopClosingType>"Geometric"</loopClosingType>
 </opencv_storage>
 

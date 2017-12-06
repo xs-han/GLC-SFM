@@ -58,3 +58,9 @@ target_link_libraries(compute_voc_adjecent_dis ${OpenCV_LIBS} DBoW3)
 
 add_executable(compute_bow_with_angle util/compute_bow_with_angle.cpp VideoStream.cpp VideoStream.h)
 target_link_libraries(compute_bow_with_angle ${OpenCV_LIBS} DBoW3)
+
+add_executable(compute_tracked_desc_dis util/compute_tracked_desc_dis.cpp FeatureMatcher.h FeatureMatcher.cpp)
+target_link_libraries(compute_tracked_desc_dis ${OpenCV_LIBS} DBoW3)
+
+add_executable(undistortDataKittiStyle util/undistortDataKittiStyle.cpp VideoStream.h VideoStream.cpp)
+target_link_libraries(undistortDataKittiStyle ${OpenCV_LIBS})

@@ -54,6 +54,7 @@ void VideoStream::setInput(const string &videoName) {
         exit(-1);
     }  // check if we succeeded
     frameRate = cap.get(CV_CAP_PROP_FPS);
+    id = 0;
 }
 
 VideoStream & VideoStream::operator>>(Mat &m) {
@@ -75,6 +76,7 @@ bool VideoStream::read(Mat &m) {
         return false;
     }
     else {
+        id += 1;
         resize(frame, m, Size(videoWidth, videoHeight));
         if (loops > 0) {
             cerr << "warning: An empty frame is founded and discarded. " << endl;

@@ -1,0 +1,2 @@
+0.2 iskey
+0.65 ratio

@@ -19,7 +19,26 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
     DescDetector->detectAndCompute(newFrame, noArray(), newKps, newDesc, false);
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
-    return matches.size() < kps.size() * 0.15;
+    int overlapMch = 0;
+    for (DMatch mch : matches) {
+        MapPoint * mpmch = mps[mch.queryIdx];
+        if(mpmch != nullptr && mpmch->good){
+            overlapMch++;
+        }
+    }
+    cout << "overlapMch: " << overlapMch << endl;
+    return (matches.size() < kps.size() * 0.3) || (overlapMch < 20);
+    //return matches.size() < kps.size() * 0.2;
+}
+
+bool KeyFrame::isFrameKeyInit(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & newDesc, vector<DMatch> & matches) {
+    newKps.clear();
+    matches.clear();
+    DescDetector->detectAndCompute(newFrame, noArray(), newKps, newDesc, false);
+    matcher.match(kps, desc, newKps, newDesc, matches);
+    cout << matches.size() << endl;
+    return (matches.size() < kps.size() * 0.3);
+    //return matches.size() < kps.size() * 0.2;
 }
 
 void KeyFrame::setRmat(const Mat & R) {
@@ -210,12 +229,22 @@ void KeyFrame::computeNewKfRT(KeyFrame &newKf, const vector<DMatch> &mch, vector
         }
     }
     cout << "useful match: " << obPoints.size() << endl;
-    if(obPoints.size() > 4) {
+//    if(obPoints.size() > 4) {
         solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 100, 1.0, 0.99, inliers,
                        SOLVEPNP_EPNP);
-    } else{
-        solvePnP(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, SOLVEPNP_EPNP);
-    }
+//    } else{
+//        obPoints.clear();
+//        imgPoints.clear();
+//        for(const DMatch & m : mch){
+//            MapPoint * p = mps[m.queryIdx];
+//            if(p != nullptr) {
+//                obPoints.emplace_back(p->x, p->y, p->z);
+//                imgPoints.push_back(newKf.kps[m.trainIdx].pt);
+//            }
+//        }
+//        solvePnPRansac(obPoints, imgPoints, cameraMatrix, noArray(), rvec, tvec, false, 100, 1.0, 0.99, inliers,
+//                       SOLVEPNP_EPNP);
+//    }
     newKf.setRmat(rvec);
     newKf.setTvec(tvec);
 }
@@ -308,7 +337,7 @@ void KeyFrame::generateImg(const vector<KeyFrame *> refKf){
         }
     }
 
-    int l = 30; // patch size
+    int l = 50; // patch size
     for(int i = 0; i < visibileKps.size(); i++){
         MapPoint * refMp = visibileMps[i];
         Mat refMpmat(3,1,CV_64F);
@@ -367,7 +396,9 @@ void KeyFrame::generateImg(const vector<KeyFrame *> refKf){
     Mat out;
     drawKeypoints(newImg,kps, out);
     namedWindow("newGenImg", 0);
+    cvtColor( out, out, CV_BGR2GRAY );
     imshow("newGenImg", out);
+    imwrite("../genjpg/"+to_string(time)+"_"+to_string(angle)+".jpg",out);
     cvWaitKey(10);
     //destroyWindow("newGenImg");
 }
@@ -376,6 +407,7 @@ KeyFrame::KeyFrame(const KeyFrame &k, double ang):img(Mat()), desc(k.desc), angl
     kps = k.kps; mps.clear();
     visibileMps.clear(); visibileKps.clear();
     good = true;
+    time = k.time;
 }
 
 

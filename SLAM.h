@@ -42,6 +42,7 @@ public:
     MapPaint mPaint;
     bool coloredMap;
     ofstream outRes;
+    string loopClosingType;
 
     explicit SLAM(string settingFile = "../cfg/setting.xml");
 

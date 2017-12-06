@@ -1,6 +1,8 @@
-function [ res ] = cal_pre_recall( input_a, input_b, r1, r2, r3 )
-%CAL_PRE_RECALL 此处显示有关此函数的摘要
-%   此处显示详细说明
+input_a = importdata('surf_lab.txt');
+input_b = importdata('surf_lab_virtual.txt');
+r1 = 153;
+r2 = 355;
+r3 = 503;
 
 thresmch = 20;
 thresdis = 30;
@@ -37,7 +39,6 @@ for threshold = 1:-0.01:0
             if(isempty(rightarray))
                 continue;
             end
-            
             
             for an_right_ans_ab = rightarray
                 if(abs(m2 - an_right_ans_ab) < thresdis  && nmch > thresmch)
@@ -100,6 +101,10 @@ for threshold = 1:-0.01:0
     res_b = [res_b;[threshold, ndetect, precision, recall]];
 end
 
-scatter(res_a(:,3),res_a(:,4),'k');
+plot(res_a(:,3),res_a(:,4),'-o');
+xlabel('precision');
+ylabel('recall rate');
 hold on;
-scatter(res_b(:,3),res_b(:,4),'*');
+plot(res_b(:,3),res_b(:,4),'-*');
+legend('DBoW','Ours');
+hold off;

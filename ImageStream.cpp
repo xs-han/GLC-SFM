@@ -49,6 +49,7 @@ void ImageStream::setInput(const string &folder) {
 bool ImageStream::read(Mat &m) {
     if(!finish){
         m = imread(*currentImagePtr);
+        id += 1;
         currentImagePtr++;
         if(*currentImagePtr == allImages.back()){
             finish = true;

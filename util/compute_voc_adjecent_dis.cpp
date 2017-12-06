@@ -5,6 +5,7 @@
 #include <iostream>
 #include "DBoW3.h"
 #include <opencv2/opencv.hpp>
+#include <opencv2/core/hal/hal.hpp>
 using namespace std;
 using namespace DBoW3;
 using namespace cv;
@@ -39,7 +40,14 @@ int main(int argc, char ** argv){
         for(int j = max(0, i - 3000); j < min((int)allWords.size(), i+3000); j++){
             if(i == j)
                 continue;
-            newDis = norm(allWords[i], allWords[j]);
+            if(allWords[i].type() == CV_32F) {
+                newDis = cv::norm(allWords[i], allWords[j]);
+            } else if (allWords[i].type() == CV_8U){
+                newDis = cv::hal::normHamming(allWords[i].data, allWords[j].data,allWords[i].cols);
+            } else{
+                cerr << "error type." << endl;
+                exit(-1);
+            }
             if(newDis < dis){
                 dis = newDis;
                 id = j;
