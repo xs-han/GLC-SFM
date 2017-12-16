@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <opencv_storage>
 	<inputType>"video"</inputType>
-	<inputPath>"/home/xushen/Videos/GOPR0056.MP4"</inputPath>
+	<inputPath>"/home/xushen/Videos/GOPR0143.MP4"</inputPath>
 	<calibrationFile>"../cfg/calib_gopro_wide.xml"</calibrationFile>
-	<descriptorType>"surf"</descriptorType>
+	<descriptorType>"surf64"</descriptorType>
 	<imageScale>2</imageScale>
 	<rectified>0</rectified>
 	<coloredMap>0</coloredMap>
-	<vocPath>"../voc/surf128_300_6_4.dbow3"</vocPath>
+	<vocPath>"../voc/surf64_300_6_4.dbow3"</vocPath>
 	<loopClosingType>"Geometric"</loopClosingType>
 </opencv_storage>
 

@@ -53,9 +53,11 @@ int main(int argc, char ** argv){
 
     VideoStream vs(argv[2]);
     Mat frame, rectFrame, outFrame;
-    int nF = 0;
     ofstream fout(folderOutput + "/../times.txt");
+    int nF = 0;
     while(vs >> frame){
+        vs >> frame;
+        vs >> frame;
         undistortFrame(frame, rectFrame, false);
         resize(rectFrame,outFrame,Size(640, 360));
         cvtColor( outFrame, outFrame, CV_BGR2GRAY );  //彩色图片转换成黑白图片
@@ -64,8 +66,8 @@ int main(int argc, char ** argv){
         string fileName = ""; fileName = fileName + fileChar + ".png";
         cout << "writing file: " << fileName << endl;
         imwrite(folderOutput+"/"+fileName, outFrame);
-        fout << nF * 1.0 / 30.0 << endl;
-        nF++;
+        fout << vs.id * 1.0 / 30.0 << endl;
+        nF += 1;
     }
     fout.close();
     return 0;

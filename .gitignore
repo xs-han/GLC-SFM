@@ -4,4 +4,6 @@ lib
 .idea
 **/bin
 **/lib
-bicocca/
+bicocca/ 
+genjpg
+build

@@ -27,7 +27,7 @@ bool KeyFrame::isFrameKey(const Mat &newFrame, vector<KeyPoint> &newKps, Mat & n
         }
     }
     cout << "overlapMch: " << overlapMch << endl;
-    return (matches.size() < kps.size() * 0.3) || (overlapMch < 20);
+    return (matches.size() < kps.size() * 0.18) || (overlapMch < 50);
     //return matches.size() < kps.size() * 0.2;
 }
 
@@ -37,7 +37,7 @@ bool KeyFrame::isFrameKeyInit(const Mat &newFrame, vector<KeyPoint> &newKps, Mat
     DescDetector->detectAndCompute(newFrame, noArray(), newKps, newDesc, false);
     matcher.match(kps, desc, newKps, newDesc, matches);
     cout << matches.size() << endl;
-    return (matches.size() < kps.size() * 0.3);
+    return (matches.size() < kps.size() * 0.18);
     //return matches.size() < kps.size() * 0.2;
 }
 
