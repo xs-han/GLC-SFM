@@ -178,7 +178,7 @@ SLAM::SLAM(string settingFile) {
     }
 
     cout << "Use descriptor " << descType << endl;
-    if (descType=="orb")        DescDetector=cv::ORB::create(1000,1.2,6);
+    if (descType=="orb")        DescDetector=cv::ORB::create(2000,1.2,6);
     else if (descType=="brisk") DescDetector=cv::BRISK::create();
     else if (descType=="akaze") DescDetector=cv::AKAZE::create();
     else if(descType=="surf" )  DescDetector=cv::xfeatures2d::SURF::create(300, 6, 4, true);
@@ -187,7 +187,7 @@ SLAM::SLAM(string settingFile) {
     else throw std::runtime_error("Invalid descriptor");
     assert(!descType.empty());
     matcher.setDetecter(KpsDetector);
-    matcher.setRatio(0.8);
+    matcher.setRatio(0.9);
     KeyFrame::DescDetector = DescDetector;
     KeyFrame::matcher = matcher;
 
@@ -488,27 +488,27 @@ bool SLAM::loopclose(int delay, int refSize, int threhold) {
     int loopId = -1, virtualId = 0; double score = -1;
     if(!ret.empty()){
         int lid = 0; int nmch = 0;
-//        for(int i = 0; i < ret.size(); i++) {
-//            int crtloopId = ret[i].Id / 3;
-//            int crtvirtualId = ret[i].Id % 3;
-//            KeyFrame *lkf1 = allKeyFrames.back();
-//            KeyFrame *lkf2;
-//            if (crtvirtualId == 0) {
-//                lkf2 = allKeyFrames[crtloopId];
-//            } else {
-//                lkf2 = allVirtualFrames[crtloopId][crtvirtualId - 1];
-//                if (!lkf2->good) {
-//                    lkf2 = allKeyFrames[crtloopId];
-//                }
-//            }
-//            vector <DMatch> mch;
-//            matcher.match(lkf1->kps, lkf1->desc, lkf2->kps, lkf2->desc, mch);
-//            if(mch.size() > nmch && mch.size() > 40){
-//                lid = i;
-//                nmch = mch.size();
-//                break;
-//            }
-//        }
+        for(int i = 0; i < ret.size(); i++) {
+            int crtloopId = ret[i].Id / 3;
+            int crtvirtualId = ret[i].Id % 3;
+            KeyFrame *lkf1 = allKeyFrames.back();
+            KeyFrame *lkf2;
+            if (crtvirtualId == 0) {
+                lkf2 = allKeyFrames[crtloopId];
+            } else {
+                lkf2 = allVirtualFrames[crtloopId][crtvirtualId - 1];
+                if (!lkf2->good) {
+                    lkf2 = allKeyFrames[crtloopId];
+                }
+            }
+            vector <DMatch> mch;
+            matcher.match(lkf1->kps, lkf1->desc, lkf2->kps, lkf2->desc, mch);
+            if(mch.size() > nmch){
+                lid = i;
+                nmch = mch.size();
+                //break;
+            }
+        }
 
         loopId = ret[lid].Id / 3;
         virtualId = ret[lid].Id % 3;

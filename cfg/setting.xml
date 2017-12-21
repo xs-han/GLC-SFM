@@ -3,11 +3,11 @@
 	<inputType>"video"</inputType>
 	<inputPath>"/home/xushen/Videos/GOPR0143.MP4"</inputPath>
 	<calibrationFile>"../cfg/calib_gopro_wide.xml"</calibrationFile>
-	<descriptorType>"surf64"</descriptorType>
+	<descriptorType>"orb"</descriptorType>
 	<imageScale>2</imageScale>
 	<rectified>0</rectified>
 	<coloredMap>0</coloredMap>
-	<vocPath>"../voc/surf64_300_6_4.dbow3"</vocPath>
+	<vocPath>"../voc/orb_2000.dbow3"</vocPath>
 	<loopClosingType>"Geometric"</loopClosingType>
 </opencv_storage>
 
